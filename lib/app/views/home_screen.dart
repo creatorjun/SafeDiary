@@ -10,6 +10,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/login_controller.dart';
 import '../routes/app_pages.dart';
 import './calendar_view.dart';
+import './weather_view.dart'; // WeatherView 임포트
 
 class HomeScreen extends GetView<HomeController> {
   const HomeScreen({super.key});
@@ -18,11 +19,10 @@ class HomeScreen extends GetView<HomeController> {
   Widget build(BuildContext context) {
     final LoginController loginController = Get.find<LoginController>();
 
+    // WeatherView를 사용하도록 screens 리스트 수정
     final List<Widget> screens = [
       const CalendarView(),
-      const Center(
-        child: Placeholder(child: Text("날씨 화면", style: textStyleMedium)),
-      ),
+      const WeatherView(), // 날씨 화면을 WeatherView로 교체
       const Center(
         child: Placeholder(child: Text("운세 화면", style: textStyleMedium)),
       ),
@@ -35,7 +35,7 @@ class HomeScreen extends GetView<HomeController> {
               '${loginController.user.nickname ?? '사용자'}님 - ${controller.currentTitle}';
           return Text(
             displayTitle,
-            style: textStyleLarge, //
+            style: textStyleLarge,
             overflow: TextOverflow.ellipsis,
           );
         }),
@@ -58,50 +58,46 @@ class HomeScreen extends GetView<HomeController> {
             icon: const Icon(Icons.more_vert),
             tooltip: '더보기',
             onSelected: (String value) {
-              print('[HomeScreen] PopupMenu onSelected: $value'); // 선택된 값 로그 출력
               if (value == 'profile') {
                 Get.toNamed(Routes.PROFILE_AUTH);
               } else if (value == 'logout') {
-                print(
-                  '[HomeScreen] 로그아웃 메뉴 선택됨, loginController.logout() 호출 시도',
-                );
-                loginController.logout(); // 이 부분이 실행되는지 확인
+                loginController.logout();
               }
             },
             itemBuilder:
                 (BuildContext context) => <PopupMenuEntry<String>>[
-                  PopupMenuItem<String>(
-                    value: 'profile',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.person_outline, color: Colors.black87),
-                        horizontalSpaceSmall, //
-                        const Text('개인정보', style: textStyleSmall), //
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'logout',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.logout, color: Colors.black87),
-                        horizontalSpaceSmall, //
-                        const Text('로그아웃', style: textStyleSmall), //
-                      ],
-                    ),
-                  ),
-                ],
+              PopupMenuItem<String>(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    const Icon(Icons.person_outline, color: Colors.black87),
+                    horizontalSpaceSmall,
+                    const Text('개인정보', style: textStyleSmall),
+                  ],
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    const Icon(Icons.logout, color: Colors.black87),
+                    horizontalSpaceSmall,
+                    const Text('로그아웃', style: textStyleSmall),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
       body: Obx(
-        () => IndexedStack(
+            () => IndexedStack(
           index: controller.selectedIndex.value,
           children: screens,
         ),
       ),
       bottomNavigationBar: Obx(
-        () => WaterDropNavBar(
+            () => WaterDropNavBar(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           waterDropColor: Colors.purpleAccent,
           inactiveIconColor: Colors.grey,

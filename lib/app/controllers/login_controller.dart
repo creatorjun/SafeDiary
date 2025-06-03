@@ -257,7 +257,7 @@ class LoginController extends GetxController {
   Future<bool> tryAutoLoginWithRefreshToken() async {
     _setLoading(true);
     _clearError();
-    http.Response refreshResponse; // <--- 변수 선언을 try 블록 밖으로 이동 고려
+    http.Response refreshResponse;
 
     try {
       final String? storedRefreshToken = await _secureStorageService.getRefreshToken();
@@ -299,6 +299,10 @@ class LoginController extends GetxController {
           partnerNickname: responseData['partnerNickname'] as String?,
           createdAt: responseData['createdAt'] != null ? DateTime.tryParse(responseData['createdAt']) : null,
         );
+
+        if(kDebugMode){
+          print(_user.value.toString());
+        }
 
         if (_user.value.safeRefreshToken != null) {
           await _secureStorageService.saveRefreshToken(refreshToken: _user.value.safeRefreshToken!);
@@ -347,9 +351,6 @@ class LoginController extends GetxController {
         _user.value = _user.value.copyWith(
           nickname: responseData['nickname'] as String? ?? newNickname,
           isAppPasswordSet: responseData['appPasswordSet'] as bool? ?? _user.value.isAppPasswordSet,
-          // partnerNickname은 이 API 응답에 포함되어 있지 않음 (Swagger UserAccountUpdateResponseDto 기준)
-          // 만약 서버에서 이 API 호출 시 partnerNickname도 응답에 포함한다면 여기서 업데이트 필요
-          // partnerNickname: responseData['partnerNickname'] as String? ?? _user.value.partnerNickname,
         );
         Get.snackbar('성공', '닉네임이 성공적으로 변경되었습니다.');
       } else {
