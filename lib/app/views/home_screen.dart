@@ -2,15 +2,15 @@
 
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
-import 'package:water_drop_nav_bar/water_drop_nav_bar.dart';
-
+import 'package:crystal_navigation_bar/crystal_navigation_bar.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_text_styles.dart';
 import '../controllers/home_controller.dart';
 import '../controllers/login_controller.dart';
 import '../routes/app_pages.dart';
 import './calendar_view.dart';
-import './weather_view.dart'; // WeatherView 임포트
+import './weather_view.dart';
+import './luck_view.dart';
 
 class HomeScreen extends GetView<HomeController> {
   const HomeScreen({super.key});
@@ -18,17 +18,16 @@ class HomeScreen extends GetView<HomeController> {
   @override
   Widget build(BuildContext context) {
     final LoginController loginController = Get.find<LoginController>();
+    final ThemeData theme = Theme.of(context);
 
-    // WeatherView를 사용하도록 screens 리스트 수정
     final List<Widget> screens = [
       const CalendarView(),
-      const WeatherView(), // 날씨 화면을 WeatherView로 교체
-      const Center(
-        child: Placeholder(child: Text("운세 화면", style: textStyleMedium)),
-      ),
+      const WeatherView(),
+      const LuckView(),
     ];
 
     return Scaffold(
+      extendBody: true,
       appBar: AppBar(
         title: Obx(() {
           final displayTitle =
@@ -97,30 +96,35 @@ class HomeScreen extends GetView<HomeController> {
         ),
       ),
       bottomNavigationBar: Obx(
-            () => WaterDropNavBar(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          waterDropColor: Colors.purpleAccent,
-          inactiveIconColor: Colors.grey,
-          iconSize: 28,
-          bottomPadding: 10,
-          barItems: [
-            BarItem(
-              filledIcon: Icons.calendar_month,
-              outlinedIcon: Icons.calendar_month_outlined,
-            ),
-            BarItem(
-              filledIcon: Icons.wb_sunny,
-              outlinedIcon: Icons.wb_sunny_outlined,
-            ),
-            BarItem(
-              filledIcon: Icons.explore,
-              outlinedIcon: Icons.explore_outlined,
-            ),
-          ],
-          selectedIndex: controller.selectedIndex.value,
-          onItemSelected: (index) {
-            controller.changeTabIndex(index);
-          },
+            () => Padding(
+          padding: const EdgeInsets.only(bottom: 10.0, left: 10.0, right: 10.0),
+          child: CrystalNavigationBar(
+            currentIndex: controller.selectedIndex.value,
+            onTap: (index) {
+              controller.changeTabIndex(index);
+            },
+            unselectedItemColor: Colors.grey.shade400,
+            backgroundColor: theme.cardColor.withOpacity(0.85),
+            borderRadius: 24,
+            enableFloatingNavBar: true,
+            items: [
+              CrystalNavigationBarItem(
+                // icon: controller.selectedIndex.value == 0 ? Icons.calendar_month : Icons.calendar_month_outlined, // 선택 시 아이콘 변경 예시
+                icon: Icons.calendar_month_outlined, // 기본 아이콘
+                selectedColor: theme.colorScheme.primary,
+              ),
+              CrystalNavigationBarItem(
+                // icon: controller.selectedIndex.value == 1 ? Icons.wb_sunny : Icons.wb_sunny_outlined, // 선택 시 아이콘 변경 예시
+                icon: Icons.wb_sunny_outlined, // 기본 아이콘
+                selectedColor: theme.colorScheme.primary,
+              ),
+              CrystalNavigationBarItem(
+                // icon: controller.selectedIndex.value == 2 ? Icons.explore : Icons.explore_outlined, // 선택 시 아이콘 변경 예시
+                icon: Icons.explore_outlined, // 기본 아이콘
+                selectedColor: theme.colorScheme.primary,
+              ),
+            ],
+          ),
         ),
       ),
       floatingActionButton: Obx(() {

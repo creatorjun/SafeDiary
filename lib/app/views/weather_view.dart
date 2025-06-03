@@ -46,45 +46,64 @@ class WeatherView extends GetView<WeatherController> {
     return 'assets/weather/weather1.png';
   }
 
-  void _showCitySelectionDialog(BuildContext context) {
-    Get.dialog(
-      AlertDialog(
-        title: const Text("도시 선택", style: textStyleMedium),
-        contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 0),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: controller.availableCities.length,
-            itemBuilder: (BuildContext context, int index) {
-              final String city = controller.availableCities[index];
-              bool isSelected = city == controller.selectedCityName.value;
-              return ListTile(
-                title: Text(
-                  city,
-                  style: textStyleSmall.copyWith(
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? Theme.of(context).primaryColor : null,
-                  ),
-                ),
-                trailing: isSelected ? Icon(Icons.check_circle, color: Theme.of(context).primaryColor, size: 20) : null,
-                onTap: () {
-                  controller.changeCity(city);
-                  // Get.back(); // changeCity 내부에서 Get.back() 호출하므로 여기서는 불필요
-                },
-              );
-            },
+  void _showCitySelectionBottomSheet(BuildContext context) {
+    Get.bottomSheet(
+      Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).canvasColor, // 현재 테마의 배경색 사용
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(16.0),
+            topRight: Radius.circular(16.0),
           ),
         ),
-        actions: [
-          TextButton(
-            child: const Text("취소", style: textStyleSmall),
-            onPressed: () {
-              Get.back();
-            },
+        child: SafeArea( // 하단 시스템 영역 침범 방지
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: Text(
+                  "도시 선택",
+                  style: textStyleMedium.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
+              const Divider(height: 1),
+              LimitedBox( // ListView의 최대 높이 제한
+                maxHeight: MediaQuery.of(context).size.height * 0.5, // 화면 높이의 50%로 제한
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: controller.availableCities.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final String city = controller.availableCities[index];
+                    bool isSelected = city == controller.selectedCityName.value;
+                    return ListTile(
+                      title: Text(
+                        city,
+                        style: textStyleSmall.copyWith(
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          // color: isSelected ? Theme.of(context).primaryColor : null,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? Icon(Icons.check_circle_outline_rounded, color: Theme.of(context).primaryColor, size: 22)
+                          : null,
+                      onTap: () {
+                        controller.changeCity(city);
+                        // Get.back(); // controller.changeCity에서 Get.back() 호출됨
+                      },
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 4.0),
+                    );
+                  },
+                ),
+              ),
+              // 취소 버튼 대신 외부 탭으로 닫기 유도 또는 상단 X 버튼 추가 가능
+              // 여기서는 기본 BottomSheet 동작(외부 탭 시 닫힘)을 활용
+            ],
           ),
-        ],
+        ),
       ),
+      isScrollControlled: true, // true로 설정해야 내용이 많을 때 전체 화면 스크롤 가능
+      // backgroundColor: Colors.transparent, // Container에서 배경색을 관리하므로 투명하게
     );
   }
 
@@ -93,7 +112,7 @@ class WeatherView extends GetView<WeatherController> {
     final PageController pageController = PageController();
 
     return Scaffold(
-      body: Obx(() { // WeatherController의 상태 변화를 감지하기 위해 Obx로 감쌈
+      body: Obx(() {
         if (controller.isLoading.value &&
             controller.weeklyForecast.value == null) {
           return const Center(child: CircularProgressIndicator());
@@ -101,23 +120,20 @@ class WeatherView extends GetView<WeatherController> {
 
         if (controller.errorMessage.value.isNotEmpty &&
             controller.weeklyForecast.value == null) {
-          return _buildErrorView(context); // context 전달
+          return _buildErrorView(context);
         }
 
         final forecastData = controller.weeklyForecast.value;
         if (forecastData == null || forecastData.forecasts.isEmpty) {
-          return _buildEmptyView(context); // context 전달
+          return _buildEmptyView(context);
         }
 
-        // PageView.builder는 controller.weeklyForecast.value가 null이 아닐 때만 빌드됨
         return PageView.builder(
           controller: pageController,
           itemCount: forecastData.forecasts.length,
           itemBuilder: (context, index) {
             final dailyForecast = forecastData.forecasts[index];
             final String backgroundImagePath = _getBackgroundImagePath(dailyForecast);
-            // _buildDailyForecastPage에 controller.selectedCityName.value를 전달하거나
-            // forecastData.regionName을 사용. 여기서는 controller.selectedCityName 사용
             return _buildDailyForecastPage(context, dailyForecast, controller.selectedCityName.value, backgroundImagePath);
           },
         );
@@ -125,7 +141,7 @@ class WeatherView extends GetView<WeatherController> {
     );
   }
 
-  Widget _buildErrorView(BuildContext context) { // context 파라미터 추가
+  Widget _buildErrorView(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -151,8 +167,7 @@ class WeatherView extends GetView<WeatherController> {
               icon: const Icon(Icons.refresh),
               label: const Text("다시 시도"),
               onPressed: () {
-                // controller.fetchWeeklyForecast("서울"); // 기존 코드
-                controller.fetchWeeklyForecast(controller.selectedCityName.value); // 수정된 코드
+                controller.fetchWeeklyForecast(controller.selectedCityName.value);
               },
             )
           ],
@@ -161,7 +176,7 @@ class WeatherView extends GetView<WeatherController> {
     );
   }
 
-  Widget _buildEmptyView(BuildContext context) { // context 파라미터 추가
+  Widget _buildEmptyView(BuildContext context) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -175,8 +190,7 @@ class WeatherView extends GetView<WeatherController> {
             icon: const Icon(Icons.refresh),
             label: const Text("새로고침"),
             onPressed: () {
-              // controller.fetchWeeklyForecast("서울"); // 기존 코드
-              controller.fetchWeeklyForecast(controller.selectedCityName.value); // 수정된 코드
+              controller.fetchWeeklyForecast(controller.selectedCityName.value);
             },
           )
         ],
@@ -218,7 +232,7 @@ class WeatherView extends GetView<WeatherController> {
         ),
         Positioned.fill(
           child: Container(
-            color: Colors.white.withAlpha(10),
+            color: Colors.black.withOpacity(0.3),
             padding: const EdgeInsets.symmetric(horizontal: 20.0).copyWith(
               top: MediaQuery.of(context).padding.top + 10,
               bottom: MediaQuery.of(context).padding.bottom + 20,
@@ -227,19 +241,17 @@ class WeatherView extends GetView<WeatherController> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // 상단 정보 (지역, 날짜)
                 Column(
                   children: [
-                    GestureDetector( // 도시 이름 탭 가능하도록
+                    GestureDetector(
                       onTap: () {
-                        _showCitySelectionDialog(context);
+                        _showCitySelectionBottomSheet(context); // BottomSheet 호출로 변경
                       },
-                      child: Row( // 아이콘 추가를 위해 Row 사용
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            // controller.weeklyForecast.value?.regionName ?? controller.selectedCityName.value, // API 응답의 regionName 또는 선택된 도시 이름
-                            currentCityName, // WeatherController의 selectedCityName을 사용
+                            currentCityName,
                             style: textStyleLarge.copyWith(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
                           ),
                           horizontalSpaceSmall,
@@ -298,7 +310,7 @@ class WeatherView extends GetView<WeatherController> {
           child: IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white, size: 28),
             tooltip: "새로고침",
-            onPressed: () => controller.fetchWeeklyForecast(controller.selectedCityName.value), // 현재 선택된 도시로 새로고침
+            onPressed: () => controller.fetchWeeklyForecast(controller.selectedCityName.value),
           ),
         ),
       ],
