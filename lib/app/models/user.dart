@@ -1,5 +1,6 @@
 // lib/app/models/user.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart'; // DateFormat 사용을 위해 추가
 
 enum LoginPlatform {
@@ -19,29 +20,31 @@ enum LoginPlatform {
 
 class User {
   final LoginPlatform platform;
-  final String? id;
+  final String? id; // 서버에서 발급하는 고유 ID (이전 socialId와 다름)
   final String? nickname;
   final String? partnerUid;
+  final String? partnerNickname; // 파트너의 닉네임 필드 추가
 
-  final String? socialAccessToken;
-  final String? safeAccessToken;
-  final String? safeRefreshToken;
+  final String? socialAccessToken; // 소셜 플랫폼의 Access Token (필요시 저장)
+  final String? safeAccessToken; // 우리 서비스의 Access Token
+  final String? safeRefreshToken; // 우리 서비스의 Refresh Token
 
   final bool isNew;
   final bool isAppPasswordSet;
-  final DateTime? createdAt; // 사용자 계정 생성 시각 필드 추가
+  final DateTime? createdAt;
 
   User({
     required this.platform,
     this.id,
     this.nickname,
     this.partnerUid,
+    this.partnerNickname, // 생성자에 추가
     this.socialAccessToken,
     this.safeAccessToken,
     this.safeRefreshToken,
     this.isNew = false,
     this.isAppPasswordSet = false,
-    this.createdAt, // 생성자에 추가
+    this.createdAt,
   });
 
   User copyWith({
@@ -49,44 +52,52 @@ class User {
     String? id,
     String? nickname,
     String? partnerUid,
+    String? partnerNickname, // copyWith에 추가
     String? socialAccessToken,
     String? safeAccessToken,
     String? safeRefreshToken,
     bool? isNew,
     bool? isAppPasswordSet,
-    DateTime? createdAt, // copyWith에 추가
+    DateTime? createdAt,
   }) {
     return User(
       platform: platform ?? this.platform,
       id: id ?? this.id,
       nickname: nickname ?? this.nickname,
       partnerUid: partnerUid ?? this.partnerUid,
+      partnerNickname: partnerNickname ?? this.partnerNickname, // copyWith에 로직 추가
       socialAccessToken: socialAccessToken ?? this.socialAccessToken,
       safeAccessToken: safeAccessToken ?? this.safeAccessToken,
       safeRefreshToken: safeRefreshToken ?? this.safeRefreshToken,
       isNew: isNew ?? this.isNew,
       isAppPasswordSet: isAppPasswordSet ?? this.isAppPasswordSet,
-      createdAt: createdAt ?? this.createdAt, // copyWith에 추가
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
   Map<String, dynamic> toJson() {
+    // toJson은 주로 클라이언트에서 서버로 User 객체를 보낼 때 사용되는데,
+    // 현재 User 모델은 서버 응답을 받아 클라이언트에서 사용하는 형태이므로,
+    // 이 메서드가 현재 사용되는지는 확인이 필요합니다.
+    // 만약 사용된다면 partnerNickname도 포함할 수 있습니다.
     return {
       'platform': platform.toJson(),
       'id': id,
       'nickname': nickname,
       'partnerUid': partnerUid,
+      'partnerNickname': partnerNickname, // toJson에 추가 (필요시)
       'socialAccessToken': socialAccessToken,
       'safeAccessToken': safeAccessToken,
       'safeRefreshToken': safeRefreshToken,
       'isNew': isNew,
       'isAppPasswordSet': isAppPasswordSet,
-      // createdAt은 보통 클라이언트에서 서버로 전송하지 않으므로 toJson에는 포함하지 않을 수 있습니다.
-      // 만약 필요하다면 ISO8601 문자열로 변환하여 추가:
-      // 'createdAt': createdAt?.toIso8601String(),
+      // 'createdAt': createdAt?.toIso8601String(), // 필요시
     };
   }
 
+  // fromJson은 현재 LoginController에서 직접 API 응답을 파싱하여 User 객체를 생성하므로,
+  // 이 메서드는 현재 직접적으로 사용되지 않을 수 있습니다.
+  // 만약 사용된다면 partnerNickname 파싱 로직을 추가해야 합니다.
   factory User.fromJson(Map<String, dynamic> json) {
     DateTime? parsedCreatedAt;
     if (json['createdAt'] != null && (json['createdAt'] as String).isNotEmpty) {
@@ -94,34 +105,39 @@ class User {
         parsedCreatedAt = DateTime.parse(json['createdAt'] as String);
       } catch (e) {
         // 파싱 실패 시 createdAt은 null로 유지
-        print('Error parsing createdAt: $e');
+        if (kDebugMode) {
+          print('Error parsing createdAt in User.fromJson: $e');
+        }
       }
     }
 
     return User(
       platform: LoginPlatform.fromJson(
+        // API 응답에서는 'loginProvider' 필드를 사용하고, User 모델에서는 'platform'을 사용하므로 주의
         json['platform'] as String? ?? LoginPlatform.none.name,
       ),
+      // API 응답에서는 'uid' 필드를 사용하고, User 모델에서는 'id'를 사용하므로 주의
       id: json['id'] as String?,
       nickname: json['nickname'] as String?,
       partnerUid: json['partnerUid'] as String?,
+      partnerNickname: json['partnerNickname'] as String?, // fromJson에 추가
       socialAccessToken: json['socialAccessToken'] as String?,
       safeAccessToken: json['safeAccessToken'] as String?,
       safeRefreshToken: json['safeRefreshToken'] as String?,
       isNew: json['isNew'] as bool? ?? false,
+      // API 응답에서는 'appPasswordSet' 필드를 사용하고, User 모델에서는 'isAppPasswordSet'을 사용하므로 주의
       isAppPasswordSet: json['isAppPasswordSet'] as bool? ?? false,
-      createdAt: parsedCreatedAt, // fromJson에 추가
+      createdAt: parsedCreatedAt,
     );
   }
 
   String get formattedCreatedAt {
     if (createdAt == null) return '';
-    // YY년 MM월 DD일 형식
     return DateFormat('yy년 MM월 dd일', 'ko_KR').format(createdAt!);
   }
 
   @override
   String toString() {
-    return 'User(platform: $platform, id: $id, nickname: $nickname, partnerUid: $partnerUid, socialAccessToken: $socialAccessToken, safeAccessToken: $safeAccessToken, safeRefreshToken: $safeRefreshToken, isNew: $isNew, isAppPasswordSet: $isAppPasswordSet, createdAt: ${createdAt?.toIso8601String()})';
+    return 'User(platform: $platform, id: $id, nickname: $nickname, partnerUid: $partnerUid, partnerNickname: $partnerNickname, socialAccessToken: $socialAccessToken, safeAccessToken: $safeAccessToken, safeRefreshToken: $safeRefreshToken, isNew: $isNew, isAppPasswordSet: $isAppPasswordSet, createdAt: ${createdAt?.toIso8601String()})';
   }
 }

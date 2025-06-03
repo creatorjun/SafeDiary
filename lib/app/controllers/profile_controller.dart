@@ -2,12 +2,16 @@
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../models/user.dart';
 import 'login_controller.dart';
+import 'partner_controller.dart'; // PartnerController 임포트
 import '../theme/app_text_styles.dart';
 import '../theme/app_spacing.dart';
+import '../models/partner_dtos.dart'; // PartnerInvitationResponseDto 사용을 위해 임포트
 
 class ProfileController extends GetxController {
   late final LoginController loginController;
+  late final PartnerController partnerController; // PartnerController 인스턴스
 
   late TextEditingController nicknameController;
   final RxString _initialNickname = ''.obs;
@@ -21,13 +25,19 @@ class ProfileController extends GetxController {
   final RxBool isNewPasswordObscured = true.obs;
   final RxBool isConfirmPasswordObscured = true.obs;
 
-  // isPasswordSet은 이제 LoginController의 user.isAppPasswordSet을 직접 반영합니다.
   RxBool get isPasswordSet => loginController.user.isAppPasswordSet.obs;
+
+  Rx<PartnerInvitationResponseDto?> get currentInvitation => partnerController.currentInvitation;
+  Rx<PartnerRelationResponseDto?> get currentPartnerRelation => partnerController.currentPartnerRelation;
+  RxBool get isPartnerLoading => partnerController.isLoading.obs; // RxBool로 직접 참조
+  User get user => loginController.user;
+
 
   @override
   void onInit() {
     super.onInit();
     loginController = Get.find<LoginController>();
+    partnerController = Get.find<PartnerController>();
 
     _initialNickname.value = loginController.user.nickname ?? '';
     nicknameController = TextEditingController(text: _initialNickname.value);
@@ -40,11 +50,7 @@ class ProfileController extends GetxController {
     newPasswordController = TextEditingController();
     confirmPasswordController = TextEditingController();
 
-    // User 객체가 변경될 때 (예: isAppPasswordSet 변경 시) UI가 반응하도록 listen합니다.
-    // GetX의 Rx<User> _user 자체가 변경될 때 반응하므로, isPasswordSet getter가 이를 반영합니다.
-    // 만약 isPasswordSet 상태에 따라 특정 컨트롤러 값을 초기화해야 한다면 아래와 같이 listen 할 수 있습니다.
     ever(loginController.obs, (_) {
-      // isAppPasswordSet 상태가 변경되면 관련 필드를 초기화할 수 있습니다.
       if (!loginController.user.isAppPasswordSet) {
         currentPasswordController.clear();
         newPasswordController.clear();
@@ -63,12 +69,10 @@ class ProfileController extends GetxController {
       Get.snackbar('알림', '닉네임이 변경되지 않았습니다.');
       return;
     }
-    // LoginController의 닉네임 변경 메소드 호출 (이미 서버 연동 가정)
     await loginController.updateUserNickname(newNickname);
-    // 성공 여부는 LoginController 내부의 _isLoading 및 errorMessage로 판단 가능
     if (!loginController.isLoading && loginController.errorMessage.isEmpty) {
-      _initialNickname.value = newNickname;
-      isNicknameChanged.value = false; // 닉네임 변경 완료 후 상태 업데이트
+      _initialNickname.value = loginController.user.nickname ?? _initialNickname.value;
+      isNicknameChanged.value = false;
     }
   }
 
@@ -94,20 +98,16 @@ class ProfileController extends GetxController {
       return;
     }
 
-    // LoginController를 통해 서버에 비밀번호 설정/변경 요청
     final success = await loginController.setAppPasswordOnServer(
       loginController.user.isAppPasswordSet ? currentPassword : null,
       newPassword,
     );
 
     if (success) {
-      // 성공 시 비밀번호 입력 필드 초기화
-      currentPasswordController.clear(); // 현재 비밀번호 필드도 초기화
+      currentPasswordController.clear();
       newPasswordController.clear();
       confirmPasswordController.clear();
-      // isPasswordSet 상태는 loginController에서 user 객체 업데이트 시 자동으로 반영됨
     }
-    // 실패 시 에러 메시지는 LoginController에서 Get.snackbar 등으로 이미 처리되었을 것으로 가정
   }
 
   Future<void> removePassword() async {
@@ -141,21 +141,18 @@ class ProfileController extends GetxController {
           ),
           TextButton(
             onPressed: () async {
-              Get.back(); // 다이얼로그 닫기
+              Get.back();
               final enteredCurrentPassword =
                   promptCurrentPasswordController.text;
               if (enteredCurrentPassword.isEmpty) {
                 Get.snackbar('오류', '현재 비밀번호를 입력해야 해제할 수 있습니다.');
                 return;
               }
-              // LoginController를 통해 서버에 비밀번호 해제 요청
               final success = await loginController
                   .removeAppPasswordOnServer(enteredCurrentPassword);
               if (success) {
-                // 성공 시 관련 필드 초기화 (필요하다면)
-                // isPasswordSet 상태는 loginController에서 user 객체 업데이트 시 자동으로 반영됨
+                // 성공
               }
-              // 실패 시 에러 메시지는 LoginController에서 처리
             },
             child: const Text('해제', style: TextStyle(color: Colors.red)),
           ),
@@ -245,6 +242,42 @@ class ProfileController extends GetxController {
         ),
       ),
       isScrollControlled: true,
+    );
+  }
+
+  Future<void> generateInvitationCode() async {
+    await partnerController.createPartnerInvitationCode();
+    if (partnerController.errorMessage.isNotEmpty) {
+      Get.snackbar('오류', partnerController.errorMessage); // .value 제거
+    }
+  }
+
+  Future<void> acceptInvitation(String code) async {
+    await partnerController.acceptPartnerInvitation(code);
+    if (partnerController.errorMessage.isNotEmpty) {
+      Get.snackbar('오류', partnerController.errorMessage); // .value 제거
+    }
+  }
+
+  Future<void> disconnectPartner() async {
+    Get.dialog(
+        AlertDialog(
+          title: const Text("파트너 연결 끊기"),
+          content: const Text("파트너와의 연결을 끊고 모든 대화 내역을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."),
+          actions: [
+            TextButton(onPressed: () => Get.back(), child: const Text("취소")),
+            TextButton(
+              onPressed: () async {
+                Get.back();
+                await partnerController.unfriendPartnerAndClearChat();
+                if (partnerController.errorMessage.isNotEmpty) {
+                  Get.snackbar('오류', partnerController.errorMessage); // .value 제거
+                }
+              },
+              child: const Text("연결 끊기", style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        )
     );
   }
 

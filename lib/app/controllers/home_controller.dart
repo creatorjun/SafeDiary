@@ -223,7 +223,7 @@ class HomeController extends GetxController {
       events.addAll(newEventsMap);
       events.refresh();
     } catch (e) {
-      Get.snackbar('오류', '이벤트 목록을 불러오는 데 실패했습니다: ${e.toString()}');
+      // Get.snackbar('오류', '이벤트 목록을 불러오는 데 실패했습니다: ${e.toString()}');
     } finally {
       isLoadingEvents.value = false;
     }
@@ -254,9 +254,9 @@ class HomeController extends GetxController {
       final list = events.putIfAbsent(normalizedEventDate, () => []);
       list.add(createdEvent);
       events.refresh();
-      Get.snackbar("성공", "새로운 일정이 추가되었습니다.");
+      // Get.snackbar("성공", "새로운 일정이 추가되었습니다.");
     } catch (e) {
-      Get.snackbar("오류", "일정 추가 실패: ${e.toString()}");
+      // Get.snackbar("오류", "일정 추가 실패: ${e.toString()}");
     } finally {
       isSubmittingEvent.value = false;
     }
@@ -277,7 +277,7 @@ class HomeController extends GetxController {
 
   Future<void> _updateEventOnServer(EventItem eventToUpdate) async {
     if (eventToUpdate.backendEventId == null) {
-      Get.snackbar("오류", "수정할 이벤트 ID가 없습니다.");
+      // Get.snackbar("오류", "수정할 이벤트 ID가 없습니다.");
       return;
     }
     isSubmittingEvent.value = true;
@@ -296,9 +296,9 @@ class HomeController extends GetxController {
       list.add(updatedEventFromServer);
 
       events.refresh();
-      Get.snackbar("성공", "일정이 수정되었습니다.");
+      // Get.snackbar("성공", "일정이 수정되었습니다.");
     } catch (e) {
-      Get.snackbar("오류", "일정 수정 실패: ${e.toString()}");
+      // Get.snackbar("오류", "일정 수정 실패: ${e.toString()}");
     } finally {
       isSubmittingEvent.value = false;
     }
@@ -306,7 +306,7 @@ class HomeController extends GetxController {
 
   void confirmDeleteEvent(EventItem eventToDelete) {
     if (eventToDelete.backendEventId == null) {
-      Get.snackbar("오류", "삭제할 이벤트 ID가 없습니다.");
+      // Get.snackbar("오류", "삭제할 이벤트 ID가 없습니다.");
       return;
     }
     Get.dialog(
@@ -340,10 +340,10 @@ class HomeController extends GetxController {
         if (events[normalizedEventDate]!.isEmpty) {
         }
         events.refresh();
-        Get.snackbar("성공", "일정이 삭제되었습니다.");
+        // Get.snackbar("성공", "일정이 삭제되었습니다.");
       }
     } catch (e) {
-      Get.snackbar("오류", "일정 삭제 실패: ${e.toString()}");
+      // Get.snackbar("오류", "일정 삭제 실패: ${e.toString()}");
     } finally {
       isSubmittingEvent.value = false;
     }

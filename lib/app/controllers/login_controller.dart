@@ -13,6 +13,7 @@ import '../models/user.dart';
 import '../routes/app_pages.dart';
 import '../config/app_config.dart';
 import '../services/secure_storage_service.dart';
+import 'partner_controller.dart';
 
 class LoginController extends GetxController {
   final SecureStorageService _secureStorageService = SecureStorageService();
@@ -49,7 +50,16 @@ class LoginController extends GetxController {
     }
   }
 
-  Future<User?> _fetchServiceTokens(User socialUser) async {
+  void updateUserPartnerUid(String? newPartnerUid) {
+    if (_user.value.partnerUid != newPartnerUid) {
+      _user.value = _user.value.copyWith(partnerUid: newPartnerUid);
+      if (kDebugMode) {
+        print("[LoginController] User's partnerUid updated to: $newPartnerUid.");
+      }
+    }
+  }
+
+  Future<User?> _fetchServiceTokensAndUpdateUser(User socialUser) async {
     final String? baseUrl = AppConfig.apiUrl;
     if (baseUrl == null) {
       _setError('API URL이 설정되지 않았습니다. (관리자 문의)');
@@ -73,44 +83,27 @@ class LoginController extends GetxController {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        final bool isNewFromServer = responseData['isNew'] as bool? ?? socialUser.isNew;
-        final String? newAccessToken = responseData['accessToken'] as String?;
-        final String? newRefreshToken = responseData['refreshToken'] as String?;
-        final bool isAppPasswordSetFromServer = responseData['isAppPasswordSet'] as bool? ?? false;
-        final String? partnerUidServer = responseData['partnerUid'] as String?;
-        final String? createdAtString = responseData['createdAt'] as String?; // createdAt 파싱
-        DateTime? createdAtDate;
-        if (createdAtString != null && createdAtString.isNotEmpty) {
-          try {
-            createdAtDate = DateTime.parse(createdAtString);
-          } catch (e) {
-            if (kDebugMode) {
-              print("[LoginController] Error parsing createdAt from server: $e");
-            }
-          }
-        }
-
-        User updatedUser = socialUser.copyWith(
-          safeAccessToken: newAccessToken,
-          safeRefreshToken: newRefreshToken,
-          isNew: isNewFromServer,
-          isAppPasswordSet: isAppPasswordSetFromServer,
-          partnerUid: partnerUidServer,
-          createdAt: createdAtDate, // createdAt 업데이트
+        _user.value = User(
+          platform: LoginPlatform.values.firstWhere(
+                (e) => e.name == (responseData['loginProvider'] as String?),
+            orElse: () => socialUser.platform,
+          ),
+          id: responseData['uid'] as String? ?? socialUser.id,
+          nickname: responseData['nickname'] as String? ?? socialUser.nickname,
+          partnerUid: responseData['partnerUid'] as String?,
+          partnerNickname: responseData['partnerNickname'] as String?, // partnerNickname 파싱 추가
+          socialAccessToken: socialUser.socialAccessToken,
+          safeAccessToken: responseData['accessToken'] as String?,
+          safeRefreshToken: responseData['refreshToken'] as String?,
+          isNew: responseData['isNew'] as bool? ?? socialUser.isNew,
+          isAppPasswordSet: responseData['appPasswordSet'] as bool? ?? false,
+          createdAt: responseData['createdAt'] != null ? DateTime.tryParse(responseData['createdAt']) : null,
         );
 
-        if (updatedUser.id != null && newRefreshToken != null) {
-          await _secureStorageService.saveUserAuthData(
-            refreshToken: newRefreshToken,
-            accessToken: newAccessToken,
-            userId: updatedUser.id!,
-            platform: updatedUser.platform.name,
-            nickname: updatedUser.nickname,
-            isNew: updatedUser.isNew,
-            userCreatedAt: updatedUser.createdAt?.toIso8601String(), // createdAt 저장 (ISO8601 문자열)
-          );
+        if (_user.value.safeRefreshToken != null) {
+          await _secureStorageService.saveRefreshToken(refreshToken: _user.value.safeRefreshToken!);
         }
-        return updatedUser;
+        return _user.value;
       } else {
         _setError('서버 통신 오류 (코드: ${response.statusCode}), 응답: ${response.body}');
         return null;
@@ -131,9 +124,6 @@ class LoginController extends GetxController {
             NaverLoginSDK.profile(callback: ProfileCallback(
                 onSuccess: (resultCode, message, response) async {
                   try {
-                    if (kDebugMode) {
-                      print('[LoginController] Naver Profile API Success: $response');
-                    }
                     final profile = NaverLoginProfile.fromJson(response: response);
                     final String naverSocialToken = await NaverLoginSDK.getAccessToken();
                     final String rawId = profile.id ?? "";
@@ -143,16 +133,15 @@ class LoginController extends GetxController {
                       _setLoading(false);
                       return;
                     }
-
                     User socialUser = User(
                       platform: LoginPlatform.naver,
                       id: rawId,
                       nickname: profile.nickName,
                       socialAccessToken: naverSocialToken,
+                      // partnerNickname은 소셜 로그인 시점에는 알 수 없음
                     );
-                    User? userWithServiceJwt = await _fetchServiceTokens(socialUser);
-                    if (userWithServiceJwt != null) {
-                      _user.value = userWithServiceJwt;
+                    User? updatedUser = await _fetchServiceTokensAndUpdateUser(socialUser);
+                    if (updatedUser != null) {
                       Get.offAllNamed(Routes.HOME);
                     }
                   } catch (e,s) {
@@ -222,17 +211,15 @@ class LoginController extends GetxController {
         _setLoading(false);
         return;
       }
-
       User socialUser = User(
         platform: LoginPlatform.kakao,
         id: rawId,
         nickname: kakaoApiUser.kakaoAccount?.profile?.nickname,
         socialAccessToken: kakaoToken.accessToken,
+        // partnerNickname은 소셜 로그인 시점에는 알 수 없음
       );
-
-      User? userWithServiceJwt = await _fetchServiceTokens(socialUser);
-      if (userWithServiceJwt != null) {
-        _user.value = userWithServiceJwt;
+      User? updatedUser = await _fetchServiceTokensAndUpdateUser(socialUser);
+      if (updatedUser != null) {
         Get.offAllNamed(Routes.HOME);
       }
     } catch (error,s) {
@@ -246,14 +233,18 @@ class LoginController extends GetxController {
     _setLoading(true);
     _clearError();
     try {
-      await _secureStorageService.clearUserAuthData(); // createdAt 포함 모든 데이터 삭제
+      if (Get.isRegistered<PartnerController>()) {
+        Get.find<PartnerController>().clearPartnerStateOnLogout();
+      }
+
+      await _secureStorageService.clearRefreshToken();
       LoginPlatform currentPlatform = _user.value.platform;
       if (currentPlatform == LoginPlatform.naver) {
         await NaverLoginSDK.release();
       } else if (currentPlatform == LoginPlatform.kakao) {
         await kakao.UserApi.instance.logout();
       }
-      _user.value = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false, createdAt: null); // createdAt 초기화
+      _user.value = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false, createdAt: null, partnerNickname: null); // partnerNickname 초기화
       Get.snackbar('로그아웃', '성공적으로 로그아웃되었습니다.');
       Get.offAllNamed(Routes.LOGIN);
     } catch (error, stackTrace) {
@@ -266,14 +257,15 @@ class LoginController extends GetxController {
   Future<bool> tryAutoLoginWithRefreshToken() async {
     _setLoading(true);
     _clearError();
+    http.Response refreshResponse; // <--- 변수 선언을 try 블록 밖으로 이동 고려
+
     try {
-      final storedData = await _secureStorageService.getUserAuthData();
-      if (storedData == null || storedData[SecureStorageService.keyRefreshToken] == null) {
+      final String? storedRefreshToken = await _secureStorageService.getRefreshToken();
+      if (storedRefreshToken == null) {
         _setLoading(false);
         return false;
       }
 
-      final String refreshToken = storedData[SecureStorageService.keyRefreshToken]!;
       final String? baseUrl = AppConfig.apiUrl;
       if (baseUrl == null) {
         _setError('API URL이 설정되지 않았습니다.');
@@ -282,10 +274,10 @@ class LoginController extends GetxController {
       }
 
       final Uri refreshUri = Uri.parse('$baseUrl/api/v1/auth/refresh');
-      final refreshResponse = await http.post(
+      refreshResponse = await http.post( // <--- 여기서 refreshResponse에 값이 할당됨
         refreshUri,
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $refreshToken'},
-        body: json.encode({'refreshToken': refreshToken}),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $storedRefreshToken'},
+        body: json.encode({'refreshToken': storedRefreshToken}),
       );
 
       if (refreshResponse.statusCode == 200) {
@@ -293,69 +285,38 @@ class LoginController extends GetxController {
         final String? newAccessToken = responseData['accessToken'] as String?;
         final String? newRefreshToken = responseData['refreshToken'] as String?;
 
-        final String refreshedUserId = responseData['id'] as String? ?? storedData[SecureStorageService.keyUserId] ?? "";
-        final String refreshedNickname = responseData['nickname'] as String? ?? storedData[SecureStorageService.keyNickname] ?? "";
-        final LoginPlatform refreshedPlatform = LoginPlatform.values.firstWhere(
-                (e) => e.name == (responseData['platform'] as String? ?? storedData[SecureStorageService.keyPlatform]),
-            orElse: () => LoginPlatform.none);
-        final bool refreshedIsNew = responseData['isNew'] as bool? ?? (storedData[SecureStorageService.keyIsNew]?.toLowerCase() == 'true');
-        final bool refreshedIsAppPasswordSet = responseData['isAppPasswordSet'] as bool? ?? false;
-        final String? refreshedPartnerUid = responseData['partnerUid'] as String?;
+        _user.value = User(
+          id: responseData['uid'] as String? ?? "",
+          nickname: responseData['nickname'] as String?,
+          platform: LoginPlatform.values.firstWhere(
+                  (e) => e.name == (responseData['loginProvider'] as String?),
+              orElse: () => LoginPlatform.none),
+          isNew: responseData['isNew'] as bool? ?? false,
+          safeAccessToken: newAccessToken,
+          safeRefreshToken: newRefreshToken ?? storedRefreshToken,
+          isAppPasswordSet: responseData['appPasswordSet'] as bool? ?? false,
+          partnerUid: responseData['partnerUid'] as String?,
+          partnerNickname: responseData['partnerNickname'] as String?,
+          createdAt: responseData['createdAt'] != null ? DateTime.tryParse(responseData['createdAt']) : null,
+        );
 
-        // createdAt 로드 및 파싱
-        final String? createdAtStringFromServer = responseData['createdAt'] as String?;
-        final String? createdAtStringFromStorage = storedData[SecureStorageService.keyUserCreatedAt];
-        DateTime? refreshedCreatedAt;
-
-        String? finalCreatedAtString = createdAtStringFromServer ?? createdAtStringFromStorage;
-
-        if (finalCreatedAtString != null && finalCreatedAtString.isNotEmpty) {
-          try {
-            refreshedCreatedAt = DateTime.parse(finalCreatedAtString);
-          } catch (e) {
-            if (kDebugMode) {
-              print("[LoginController] Error parsing createdAt during auto-login: $e");
-            }
-          }
+        if (_user.value.safeRefreshToken != null) {
+          await _secureStorageService.saveRefreshToken(refreshToken: _user.value.safeRefreshToken!);
         }
-
-
-        if (newAccessToken != null && refreshedUserId.isNotEmpty) {
-          _user.value = User(
-            id: refreshedUserId,
-            nickname: refreshedNickname,
-            platform: refreshedPlatform,
-            isNew: refreshedIsNew,
-            safeAccessToken: newAccessToken,
-            safeRefreshToken: newRefreshToken ?? refreshToken,
-            isAppPasswordSet: refreshedIsAppPasswordSet,
-            partnerUid: refreshedPartnerUid,
-            createdAt: refreshedCreatedAt, // createdAt 설정
-          );
-
-          await _secureStorageService.saveUserAuthData(
-            refreshToken: newRefreshToken ?? refreshToken,
-            accessToken: newAccessToken,
-            userId: _user.value.id!,
-            platform: _user.value.platform.name,
-            nickname: _user.value.nickname,
-            isNew: _user.value.isNew,
-            userCreatedAt: _user.value.createdAt?.toIso8601String(), // createdAt 저장
-          );
-          _setLoading(false);
-          return true;
-        }
-      } else {
-        await _secureStorageService.clearUserAuthData();
+        _setLoading(false);
+        return true;
+      } else { // <--- 이 블록에 도달했다면 refreshResponse는 이미 값이 할당된 상태여야 함
+        await _secureStorageService.clearRefreshToken();
+        // 여기서 'response' 대신 'refreshResponse'를 사용해야 함
         _setError('토큰 갱신 실패 (코드: ${refreshResponse.statusCode}), 응답: ${refreshResponse.body}');
       }
-    } catch (e,s) {
+    } catch (e,s) { // 네트워크 오류 등 http.post 자체가 실패한 경우
       _setError('자동 로그인 시도 중 예외 발생: $e\n$s');
+      // 이 경우 refreshResponse는 초기화되지 않았을 수 있음
     }
     _setLoading(false);
     return false;
   }
-
   Future<void> updateUserNickname(String newNickname) async {
     if (newNickname.trim().isEmpty) {
       Get.snackbar('오류', '닉네임은 비워둘 수 없습니다.');
@@ -381,9 +342,15 @@ class LoginController extends GetxController {
         body: json.encode({'nickname': newNickname}),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        _user.value = _user.value.copyWith(nickname: newNickname);
-        _user.refresh();
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        _user.value = _user.value.copyWith(
+          nickname: responseData['nickname'] as String? ?? newNickname,
+          isAppPasswordSet: responseData['appPasswordSet'] as bool? ?? _user.value.isAppPasswordSet,
+          // partnerNickname은 이 API 응답에 포함되어 있지 않음 (Swagger UserAccountUpdateResponseDto 기준)
+          // 만약 서버에서 이 API 호출 시 partnerNickname도 응답에 포함한다면 여기서 업데이트 필요
+          // partnerNickname: responseData['partnerNickname'] as String? ?? _user.value.partnerNickname,
+        );
         Get.snackbar('성공', '닉네임이 성공적으로 변경되었습니다.');
       } else {
         _setError('닉네임 변경 실패 (코드: ${response.statusCode}), 응답: ${response.body}');
@@ -423,7 +390,8 @@ class LoginController extends GetxController {
         _setLoading(false);
         return responseData['isVerified'] as bool? ?? false;
       } else if (response.statusCode == 401) {
-        _setError('앱 비밀번호가 일치하지 않습니다.', showGeneralMessageToUser: false);
+        final responseData = json.decode(response.body);
+        _setError(responseData['message'] ?? '앱 비밀번호가 일치하지 않습니다.', showGeneralMessageToUser: false);
         _setLoading(false);
         return false;
       }
@@ -467,21 +435,26 @@ class LoginController extends GetxController {
         body: json.encode(requestBody),
       );
 
-      print(requestBody);
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        _user.value = _user.value.copyWith(isAppPasswordSet: true);
-        _user.refresh();
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        _user.value = _user.value.copyWith(
+          isAppPasswordSet: responseData['appPasswordSet'] as bool? ?? true,
+          nickname: responseData['nickname'] as String? ?? _user.value.nickname,
+          // partnerNickname은 이 API 응답에 포함되어 있지 않음 (Swagger UserAccountUpdateResponseDto 기준)
+          // partnerNickname: responseData['partnerNickname'] as String? ?? _user.value.partnerNickname,
+        );
         Get.snackbar('성공', '앱 비밀번호가 성공적으로 설정/변경되었습니다.');
         _setLoading(false);
         return true;
       } else if (response.statusCode == 401 && currentAppPassword != null) {
-        _setError('현재 앱 비밀번호가 일치하지 않습니다.', showGeneralMessageToUser: false);
+        final responseData = json.decode(response.body);
+        _setError(responseData['message'] ?? '현재 앱 비밀번호가 일치하지 않습니다.', showGeneralMessageToUser: false);
         _setLoading(false);
         return false;
       }
       else {
-        _setError('앱 비밀번호 설정/변경 실패 (코드: ${response.statusCode}), 응답: ${response.body}');
+        final responseData = json.decode(response.body);
+        _setError(responseData['message'] ?? '앱 비밀번호 설정/변경 실패 (코드: ${response.statusCode})');
         _setLoading(false);
         return false;
       }
@@ -516,15 +489,20 @@ class LoginController extends GetxController {
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-
       if (response.statusCode == 204) {
         _user.value = _user.value.copyWith(isAppPasswordSet: false);
-        _user.refresh();
         Get.snackbar('성공', '앱 비밀번호가 성공적으로 해제되었습니다.');
         _setLoading(false);
         return true;
       } else if (response.statusCode == 401) {
-        _setError('현재 앱 비밀번호가 일치하지 않아 해제할 수 없습니다.', showGeneralMessageToUser: false);
+        String errorMessage = '현재 앱 비밀번호가 일치하지 않아 해제할 수 없습니다.';
+        try {
+          final responseBody = json.decode(response.body);
+          if (responseBody['message'] != null) {
+            errorMessage = responseBody['message'];
+          }
+        } catch (_) {}
+        _setError(errorMessage, showGeneralMessageToUser: false);
         _setLoading(false);
         return false;
       }
@@ -537,51 +515,6 @@ class LoginController extends GetxController {
       _setError('앱 비밀번호 해제 중 예외 발생: $e\n$s');
       _setLoading(false);
       return false;
-    }
-  }
-
-  Future<void> unfriendPartnerAndClearChat() async {
-    final String? baseUrl = AppConfig.apiUrl;
-    final String? token = _user.value.safeAccessToken;
-
-    if (baseUrl == null || token == null) {
-      _setError('API URL 또는 사용자 토큰이 유효하지 않습니다. (파트너 해제 실패)');
-      return;
-    }
-
-    if (_user.value.partnerUid == null || _user.value.partnerUid!.isEmpty) {
-      if (kDebugMode) {
-        print("[LoginController] No partner to unfriend.");
-      }
-      return;
-    }
-
-    final Uri requestUri = Uri.parse('$baseUrl/api/v1/users/me/partner');
-    try {
-      final response = await http.delete(
-        requestUri,
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      if (response.statusCode == 204) {
-        if (kDebugMode) {
-          print("[LoginController] Partner relationship and chat history deleted successfully.");
-        }
-        _user.value = _user.value.copyWith(partnerUid: null);
-        _user.refresh();
-        Get.snackbar('알림', '파트너 관계가 해제되고 대화 내역이 삭제되었습니다.');
-      } else if (response.statusCode == 401) {
-        _setError('인증 실패로 파트너 관계를 해제할 수 없습니다. (코드: ${response.statusCode})', showGeneralMessageToUser: false);
-      } else if (response.statusCode == 404) {
-        _setError('사용자 또는 파트너 정보를 찾을 수 없습니다. (코드: ${response.statusCode})', showGeneralMessageToUser: false);
-      }
-      else {
-        _setError('파트너 관계 해제 실패 (코드: ${response.statusCode}), 응답: ${response.body}');
-      }
-    } catch (e,s) {
-      _setError('파트너 관계 해제 중 예외 발생: $e\n$s');
     }
   }
 
@@ -599,7 +532,9 @@ class LoginController extends GetxController {
 
     try {
       if (_user.value.partnerUid != null && _user.value.partnerUid!.isNotEmpty) {
-        await unfriendPartnerAndClearChat();
+        if (Get.isRegistered<PartnerController>()) {
+          await Get.find<PartnerController>().unfriendPartnerAndClearChat();
+        }
       }
 
       final response = await http.delete(
@@ -612,6 +547,7 @@ class LoginController extends GetxController {
       if (response.statusCode == 204 || response.statusCode == 200) {
         LoginPlatform currentPlatform = _user.value.platform;
         if (currentPlatform == LoginPlatform.naver) {
+          // Naver SDK unlinking
         } else if (currentPlatform == LoginPlatform.kakao) {
           try {
             await kakao.UserApi.instance.unlink();
@@ -619,8 +555,13 @@ class LoginController extends GetxController {
             if (kDebugMode) print("Kakao unlink error: $unlinkError");
           }
         }
-        await _secureStorageService.clearUserAuthData();
-        _user.value = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false, partnerUid: null, createdAt: null); // createdAt 초기화
+        await _secureStorageService.clearRefreshToken();
+        _user.value = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false, partnerUid: null, createdAt: null, partnerNickname: null); // partnerNickname 초기화
+
+        if (Get.isRegistered<PartnerController>()) {
+          Get.find<PartnerController>().clearPartnerStateOnLogout();
+        }
+
         Get.offAllNamed(Routes.LOGIN);
         Get.snackbar('회원 탈퇴 완료', '회원 탈퇴가 성공적으로 처리되었습니다.');
       } else {

@@ -3,28 +3,37 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // dotenv.env를 직접 사용하는 부분이 있어서 유지
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:naver_login_sdk/naver_login_sdk.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk_user.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-import 'app/routes/app_pages.dart'; // Routes 클래스를 사용하기 위해 임포트
+import 'app/routes/app_pages.dart';
 import 'app/config/app_config.dart';
 import 'app/controllers/login_controller.dart';
 import 'app/bindings/login_binding.dart';
+import 'app/services/secure_storage_service.dart'; // SecureStorageService 임포트
+// AuthService와 UserService는 LoginBinding에서 처리하므로 여기서 직접 임포트할 필요는 없습니다.
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // .env 파일 로드 (AppConfig를 통해)
+  // .env 파일 로드
   await AppConfig.loadEnv();
 
   // Date-formatting 로케일 초기화
   await initializeDateFormatting();
 
-  // LoginBinding을 통해 LoginController를 GetX에 영구적으로 등록
+  // --- SecureStorageService 등록 ---
+  // 앱 전역에서 사용될 수 있도록 영구 인스턴스로 등록합니다.
+  Get.put<SecureStorageService>(SecureStorageService(), permanent: true);
+  // ---------------------------------
+
+  // LoginBinding을 통해 LoginController 및 관련 서비스(AuthService, UserService) 등록
+  // LoginController가 permanent:true 이므로, LoginBinding도 앱 시작 시점에 호출될 수 있습니다.
   if (!Get.isRegistered<LoginController>()) {
-    LoginBinding().dependencies();
+    LoginBinding()
+        .dependencies(); // 이 안에서 LoginController, AuthService, UserService가 등록됩니다.
   }
   final LoginController loginController = Get.find<LoginController>();
 
@@ -59,9 +68,7 @@ void main() async {
 
   KakaoSdk.init(nativeAppKey: kakaoNativeAppKey);
 
-  runApp(
-    MyApp(initialRoute: autoLoginSuccess ? Routes.HOME : Routes.LOGIN),
-  ); // Routes.HOME, Routes.LOGIN 사용
+  runApp(MyApp(initialRoute: autoLoginSuccess ? Routes.HOME : Routes.LOGIN));
 }
 
 class MyApp extends StatelessWidget {

@@ -1,15 +1,19 @@
 // lib/app/views/profile_screen.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Clipboard 사용
 import 'package:flutter_svg_provider/flutter_svg_provider.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart'; // 날짜 포맷팅
+
 import '../controllers/profile_controller.dart';
 import '../models/user.dart' show LoginPlatform;
 import '../theme/app_text_styles.dart';
 import '../theme/app_spacing.dart';
 
 class ProfileScreen extends GetView<ProfileController> {
-  const ProfileScreen({super.key});
+  ProfileScreen({super.key});
 
   Widget _buildPasswordField({
     required TextEditingController controller,
@@ -19,10 +23,10 @@ class ProfileScreen extends GetView<ProfileController> {
     required VoidCallback toggleVisibility,
   }) {
     return Obx(
-          () => TextField(
+      () => TextField(
         controller: controller,
         obscureText: isObscured.value,
-        style: textStyleMedium, //
+        style: textStyleMedium,
         decoration: InputDecoration(
           labelText: labelText,
           hintText: hintText,
@@ -38,17 +42,209 @@ class ProfileScreen extends GetView<ProfileController> {
     );
   }
 
+  Widget _buildPartnerSection(BuildContext context) {
+    return Obx(() {
+      if (controller.isPartnerLoading.value) {
+        return const Center(child: CircularProgressIndicator());
+      }
+
+      final user = controller.user; // LoginController의 User 객체
+      final partnerRelation =
+          controller
+              .currentPartnerRelation
+              .value; // PartnerController의 상세 관계 정보
+      final invitation = controller.currentInvitation.value;
+
+      // 1. 파트너와 이미 연결된 경우 (user.partnerUid 존재를 우선 확인)
+      if (user.partnerUid != null && user.partnerUid!.isNotEmpty) {
+        String partnerNickname = '정보 없음';
+        String partnerUserUid = user.partnerUid!; // partnerUid가 있으므로 ! 사용 가능
+        String formattedPartnerSince = '날짜 정보 없음';
+
+        if (partnerRelation != null) {
+          // 상세 정보가 있다면 사용
+          partnerNickname = partnerRelation.partnerUser.nickname ?? '정보 없음';
+          // partnerUserUid는 이미 user.partnerUid로 확인되었으므로 partnerRelation.partnerUser.userUid와 동일해야 함
+          try {
+            DateTime? partnerSinceDate =
+                DateTime.parse(partnerRelation.partnerSince).toLocal();
+            formattedPartnerSince = DateFormat(
+              'yy년 MM월 dd일',
+              'ko_KR',
+            ).format(partnerSinceDate);
+          } catch (e) {
+            if (kDebugMode) {
+              print(
+                'Error parsing partnerSince date: ${partnerRelation.partnerSince}',
+              );
+            }
+          }
+        }
+
+        return Card(
+          elevation: 2.0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '연결된 파트너',
+                  style: textStyleMedium.copyWith(fontWeight: FontWeight.bold),
+                ),
+                verticalSpaceSmall,
+                Text('닉네임: $partnerNickname'),
+                Text('UID: $partnerUserUid'),
+                if (partnerRelation != null) // 상세 정보가 있을 때만 연결 시작일 표시
+                  Text('연결 시작일: $formattedPartnerSince'),
+                verticalSpaceMedium,
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 45),
+                    backgroundColor: Colors.red.shade300,
+                  ),
+                  onPressed: () {
+                    controller.disconnectPartner();
+                  },
+                  child: Text(
+                    '파트너 연결 끊기',
+                    style: textStyleSmall.copyWith(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      // 2. (파트너 없는 경우) 생성된 초대 코드가 있는 경우
+      else if (invitation != null) {
+        DateTime? expiresAtDate;
+        try {
+          expiresAtDate = DateTime.parse(invitation.expiresAt).toLocal();
+        } catch (e) {
+          if (kDebugMode) {
+            print('Error parsing expiresAt date: ${invitation.expiresAt}');
+          }
+        }
+        String formattedExpiresAt =
+            expiresAtDate != null
+                ? DateFormat('yy/MM/dd HH:mm', 'ko_KR').format(expiresAtDate)
+                : '알 수 없음';
+
+        return Card(
+          elevation: 2.0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '생성된 파트너 초대 코드',
+                  style: textStyleMedium.copyWith(fontWeight: FontWeight.bold),
+                ),
+                verticalSpaceSmall,
+                TextField(
+                  controller: TextEditingController(
+                    text: invitation.invitationId,
+                  ),
+                  readOnly: true,
+                  decoration: InputDecoration(
+                    labelText: '초대 코드',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.copy),
+                      tooltip: '코드 복사',
+                      onPressed: () {
+                        Clipboard.setData(
+                          ClipboardData(text: invitation.invitationId),
+                        );
+                        Get.snackbar('복사 완료', '초대 코드가 클립보드에 복사되었습니다.');
+                      },
+                    ),
+                  ),
+                ),
+                verticalSpaceSmall,
+                Text('만료 시간: $formattedExpiresAt', style: textStyleSmall),
+                verticalSpaceMedium,
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 45),
+                  ),
+                  onPressed: () {
+                    controller.generateInvitationCode();
+                  },
+                  child: const Text('새로운 코드로 다시 생성하기'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      // 3. 파트너도 없고, 생성된 초대 코드도 없는 경우
+      else {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                backgroundColor: Colors.teal,
+              ),
+              onPressed: () {
+                controller.generateInvitationCode();
+              },
+              child: Text(
+                '파트너 초대 코드 생성하기',
+                style: textStyleMedium.copyWith(color: Colors.white),
+              ),
+            ),
+            verticalSpaceMedium,
+            TextField(
+              controller: _invitationCodeInputController,
+              decoration: InputDecoration(
+                hintText: '받은 초대 코드 입력',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.send),
+                  tooltip: '초대 수락',
+                  onPressed: () {
+                    final code = _invitationCodeInputController.text.trim();
+                    if (code.isNotEmpty) {
+                      controller.acceptInvitation(code);
+                    } else {
+                      Get.snackbar('오류', '초대 코드를 입력해주세요.');
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+    });
+  }
+
+  final TextEditingController _invitationCodeInputController =
+      TextEditingController();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('개인정보 설정', style: textStyleLarge), //
+        title: const Text('개인정보 설정', style: textStyleLarge),
         centerTitle: true,
       ),
       body: Obx(() {
-        // LoginController의 user 객체를 Obx 내부에서 접근하여 createdAt 변경 시 UI 업데이트
-        final user = controller.loginController.user;
-        final formattedCreatedAt = user.formattedCreatedAt; // User 모델에 추가한 getter 사용
+        final user = controller.user;
+        final formattedCreatedAt = user.formattedCreatedAt;
 
         return SingleChildScrollView(
           child: Padding(
@@ -58,34 +254,32 @@ class ProfileScreen extends GetView<ProfileController> {
               children: [
                 Text(
                   '닉네임 변경',
-                  style: textStyleLarge.copyWith( //
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: textStyleLarge.copyWith(fontWeight: FontWeight.bold),
                 ),
-                verticalSpaceSmall, //
+                verticalSpaceSmall,
                 TextField(
                   controller: controller.nicknameController,
-                  style: textStyleMedium, //
+                  style: textStyleMedium,
                   decoration: InputDecoration(
                     hintText: '새 닉네임을 입력하세요',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8.0),
                     ),
                     suffixIcon: Obx(
-                          () =>
-                      controller.isNicknameChanged.value &&
-                          controller.nicknameController.text.isNotEmpty
-                          ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          controller.nicknameController.clear();
-                        },
-                      )
-                          : const SizedBox.shrink(),
+                      () =>
+                          controller.isNicknameChanged.value &&
+                                  controller.nicknameController.text.isNotEmpty
+                              ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  controller.nicknameController.clear();
+                                },
+                              )
+                              : const SizedBox.shrink(),
                     ),
                   ),
                 ),
-                verticalSpaceMedium, //
+                verticalSpaceMedium,
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 50),
@@ -100,19 +294,17 @@ class ProfileScreen extends GetView<ProfileController> {
                   },
                   child: Text(
                     '닉네임 저장',
-                    style: textStyleMedium.copyWith(color: Colors.white), //
+                    style: textStyleMedium.copyWith(color: Colors.white),
                   ),
                 ),
-                verticalSpaceLarge, //
+                verticalSpaceLarge,
                 const Divider(),
-                verticalSpaceLarge, //
+                verticalSpaceLarge,
                 Text(
                   controller.isPasswordSet.value ? '접근 비밀번호 변경' : '접근 비밀번호 설정',
-                  style: textStyleLarge.copyWith( //
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: textStyleLarge.copyWith(fontWeight: FontWeight.bold),
                 ),
-                verticalSpaceMedium, //
+                verticalSpaceMedium,
                 if (controller.isPasswordSet.value)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
@@ -122,7 +314,7 @@ class ProfileScreen extends GetView<ProfileController> {
                       hintText: '현재 설정된 비밀번호 입력',
                       isObscured: controller.isCurrentPasswordObscured,
                       toggleVisibility:
-                      controller.toggleCurrentPasswordVisibility,
+                          controller.toggleCurrentPasswordVisibility,
                     ),
                   ),
                 _buildPasswordField(
@@ -132,7 +324,7 @@ class ProfileScreen extends GetView<ProfileController> {
                   isObscured: controller.isNewPasswordObscured,
                   toggleVisibility: controller.toggleNewPasswordVisibility,
                 ),
-                verticalSpaceMedium, //
+                verticalSpaceMedium,
                 _buildPasswordField(
                   controller: controller.confirmPasswordController,
                   labelText: '새 비밀번호 확인',
@@ -140,7 +332,7 @@ class ProfileScreen extends GetView<ProfileController> {
                   isObscured: controller.isConfirmPasswordObscured,
                   toggleVisibility: controller.toggleConfirmPasswordVisibility,
                 ),
-                verticalSpaceLarge, //
+                verticalSpaceLarge,
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 50),
@@ -151,11 +343,11 @@ class ProfileScreen extends GetView<ProfileController> {
                   },
                   child: Text(
                     controller.isPasswordSet.value ? '비밀번호 변경' : '비밀번호 설정',
-                    style: textStyleMedium.copyWith(color: Colors.white), //
+                    style: textStyleMedium.copyWith(color: Colors.white),
                   ),
                 ),
                 if (controller.isPasswordSet.value) ...[
-                  verticalSpaceMedium, //
+                  verticalSpaceMedium,
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 50),
@@ -166,22 +358,29 @@ class ProfileScreen extends GetView<ProfileController> {
                     },
                     child: Text(
                       '접근 비밀번호 해제',
-                      style: textStyleMedium.copyWith( //
+                      style: textStyleMedium.copyWith(
                         color: Colors.red.shade700,
                       ),
                     ),
                   ),
                 ],
-                verticalSpaceLarge, //
+                verticalSpaceLarge,
                 const Divider(),
-                verticalSpaceMedium, //
+                verticalSpaceLarge,
+                Text(
+                  '파트너 연결',
+                  style: textStyleLarge.copyWith(fontWeight: FontWeight.bold),
+                ),
+                verticalSpaceMedium,
+                _buildPartnerSection(context),
+                verticalSpaceLarge,
+                const Divider(),
+                verticalSpaceMedium,
                 Text(
                   '로그인 정보',
-                  style: textStyleLarge.copyWith( //
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: textStyleLarge.copyWith(fontWeight: FontWeight.bold),
                 ),
-                verticalSpaceSmall, //
+                verticalSpaceSmall,
                 Card(
                   elevation: 2.0,
                   shape: RoundedRectangleBorder(
@@ -192,7 +391,7 @@ class ProfileScreen extends GetView<ProfileController> {
                       horizontal: 16.0,
                       vertical: 12.0,
                     ),
-                    child: Column( // Column으로 변경하여 Since 날짜 추가
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
@@ -202,46 +401,49 @@ class ProfileScreen extends GetView<ProfileController> {
                               width: 22,
                               height: 22,
                               child:
-                              user.platform == LoginPlatform.naver
-                                  ? const Image(
-                                image: Svg('assets/naver_icon.svg'),
-                              )
-                                  : user.platform == LoginPlatform.kakao
-                                  ? const Image(
-                                image: Svg('assets/kakao_icon.svg'),
-                              )
-                                  : const Icon(
-                                Icons.device_unknown_outlined,
-                                color: Colors.grey,
-                                size: 22,
-                              ),
+                                  user.platform == LoginPlatform.naver
+                                      ? const Image(
+                                        image: Svg('assets/naver_icon.svg'),
+                                      )
+                                      : user.platform == LoginPlatform.kakao
+                                      ? const Image(
+                                        image: Svg('assets/kakao_icon.svg'),
+                                      )
+                                      : const Icon(
+                                        Icons.device_unknown_outlined,
+                                        color: Colors.grey,
+                                        size: 22,
+                                      ),
                             ),
-                            horizontalSpaceSmall, //
+                            horizontalSpaceSmall,
                             Text(
                               user.platform == LoginPlatform.naver
                                   ? "네이버 로그인"
                                   : user.platform == LoginPlatform.kakao
                                   ? "카카오 로그인"
-                                  : (user.platform.name.capitalizeFirst ?? '정보 없음'),
-                              style: textStyleMedium, //
+                                  : (user.platform.name.capitalizeFirst ??
+                                      '정보 없음'),
+                              style: textStyleMedium,
                             ),
                           ],
                         ),
-                        if (formattedCreatedAt.isNotEmpty) ...[ // createdAt 정보가 있을 경우에만 표시
-                          verticalSpaceSmall, //
+                        if (formattedCreatedAt.isNotEmpty) ...[
+                          verticalSpaceSmall,
                           Align(
                             alignment: Alignment.bottomRight,
                             child: Text(
                               'Since: $formattedCreatedAt',
-                              style: textStyleSmall.copyWith(color: Colors.grey.shade600), //
+                              style: textStyleSmall.copyWith(
+                                color: Colors.grey.shade600,
+                              ),
                             ),
                           ),
-                        ]
+                        ],
                       ],
                     ),
                   ),
                 ),
-                verticalSpaceMedium, //
+                verticalSpaceMedium,
                 Card(
                   elevation: 2.0,
                   color: Colors.white,
@@ -249,22 +451,32 @@ class ProfileScreen extends GetView<ProfileController> {
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: ListTile(
-                    leading: Icon(Icons.warning_amber_rounded, color: Colors.red.shade600),
+                    leading: Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red.shade600,
+                    ),
                     title: Text(
                       '회원 탈퇴',
-                      style: textStyleMedium.copyWith( //
-                          color: Colors.red.shade700,
-                          fontWeight: FontWeight.bold
+                      style: textStyleMedium.copyWith(
+                        color: Colors.red.shade700,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey.shade600, size: 16),
+                    trailing: Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.grey.shade600,
+                      size: 16,
+                    ),
                     onTap: () {
                       controller.handleAccountDeletionRequest();
                     },
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 8.0,
+                    ),
                   ),
                 ),
-                verticalSpaceLarge, //
+                verticalSpaceLarge,
               ],
             ),
           ),

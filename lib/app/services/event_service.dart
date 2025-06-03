@@ -13,8 +13,6 @@ class EventService extends GetxService {
   final LoginController _loginController = Get.find<LoginController>();
 
   Future<String?> _getAccessToken() async {
-    // LoginController에서 User 객체를 통해 safeAccessToken을 가져옵니다.
-    // User 객체는 null일 수 있으므로 null 체크가 필요합니다.
     return _loginController.user.safeAccessToken;
   }
 

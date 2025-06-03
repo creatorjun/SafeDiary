@@ -1,5 +1,6 @@
 // lib/app/services/secure_storage_service.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorageService {
@@ -7,81 +8,30 @@ class SecureStorageService {
 
   // 저장 시 사용할 키 정의
   static const String keyRefreshToken = 'refreshToken';
-  static const String keyAccessToken = 'accessToken';
-  static const String keyUserId = 'userId';
-  static const String keyPlatform = 'platform';
-  static const String keyNickname = 'nickname';
-  static const String keyIsNew = 'isNew';
-  static const String keyUserCreatedAt = 'userCreatedAt'; // createdAt 키 추가
 
-  // 사용자 인증 관련 정보 저장
-  Future<void> saveUserAuthData({
+  // 리프레시 토큰 저장
+  Future<void> saveRefreshToken({
     required String refreshToken,
-    String? accessToken,
-    required String userId,
-    required String platform,
-    String? nickname,
-    bool? isNew,
-    String? userCreatedAt, // DateTime을 String (ISO8601)으로 받아 저장
   }) async {
     await _storage.write(key: keyRefreshToken, value: refreshToken);
-    if (accessToken != null) {
-      await _storage.write(key: keyAccessToken, value: accessToken);
-    }
-    await _storage.write(key: keyUserId, value: userId);
-    await _storage.write(key: keyPlatform, value: platform);
-    if (nickname != null) {
-      await _storage.write(key: keyNickname, value: nickname);
-    }
-    if (isNew != null) {
-      await _storage.write(
-        key: keyIsNew,
-        value: isNew.toString(),
-      );
-    }
-    if (userCreatedAt != null) { // createdAt 저장 로직 추가
-      await _storage.write(key: keyUserCreatedAt, value: userCreatedAt);
-    }
   }
 
-  // 저장된 사용자 인증 관련 정보 조회
-  Future<Map<String, String?>?> getUserAuthData() async {
-    final refreshToken = await _storage.read(key: keyRefreshToken);
-    if (refreshToken == null) {
-      return null;
-    }
-    final accessToken = await _storage.read(key: keyAccessToken);
-    final userId = await _storage.read(key: keyUserId);
-    final platform = await _storage.read(key: keyPlatform);
-    final nickname = await _storage.read(key: keyNickname);
-    final isNewString = await _storage.read(key: keyIsNew);
-    final userCreatedAtString = await _storage.read(key: keyUserCreatedAt); // createdAt 로드 로직 추가
-
-    return {
-      keyRefreshToken: refreshToken,
-      keyAccessToken: accessToken,
-      keyUserId: userId,
-      keyPlatform: platform,
-      keyNickname: nickname,
-      keyIsNew: isNewString,
-      keyUserCreatedAt: userCreatedAtString,
-    };
+  // 저장된 리프레시 토큰 조회
+  Future<String?> getRefreshToken() async {
+    return await _storage.read(key: keyRefreshToken);
   }
 
-  // 저장된 모든 사용자 인증 관련 정보 삭제 (로그아웃 시)
-  Future<void> clearUserAuthData() async {
+  // 저장된 리프레시 토큰 삭제 (로그아웃 또는 토큰 만료 시)
+  Future<void> clearRefreshToken() async {
     await _storage.delete(key: keyRefreshToken);
-    await _storage.delete(key: keyAccessToken);
-    await _storage.delete(key: keyUserId);
-    await _storage.delete(key: keyPlatform);
-    await _storage.delete(key: keyNickname);
-    await _storage.delete(key: keyIsNew);
-    await _storage.delete(key: keyUserCreatedAt); // createdAt 삭제 로직 추가
-    print('[SecureStorageService] Secure storage cleared for user auth data.');
+    if(kDebugMode) print('[SecureStorageService] Refresh token cleared from secure storage.');
   }
 
-  Future<String?> getRefreshToken() => _storage.read(key: keyRefreshToken);
-  Future<String?> getAccessToken() => _storage.read(key: keyAccessToken);
-// keyUserCreatedAt에 대한 getter는 필요시 추가 가능
-// Future<String?> getUserCreatedAt() => _storage.read(key: keyUserCreatedAt);
+  // 모든 사용자 인증 관련 정보 삭제 (앱 초기화 또는 전체 데이터 삭제 필요시)
+  // 이 함수는 여전히 모든 정의된 키를 삭제하려고 시도할 수 있으나,
+  // 주 사용은 clearRefreshToken으로 대체될 수 있습니다.
+  Future<void> clearAllUserAuthData() async {
+    await _storage.delete(key: keyRefreshToken);
+    if(kDebugMode) print('[SecureStorageService] All user auth related data attempt to clear.');
+  }
 }
