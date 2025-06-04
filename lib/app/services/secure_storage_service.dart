@@ -9,7 +9,8 @@ class SecureStorageService {
   // 저장 시 사용할 키 정의
   static const String keyRefreshToken = 'refreshToken';
   static const String keySelectedCity = 'selectedCity';
-  static const String keySelectedZodiac = 'selectedZodiac'; // 선택된 띠를 위한 키 추가
+  static const String keySelectedZodiac = 'selectedZodiac';
+  static const String keyFailedAttemptCount = 'failedAttemptCount'; // 실패 횟수 키
 
   // 리프레시 토큰 저장
   Future<void> saveRefreshToken({
@@ -67,11 +68,32 @@ class SecureStorageService {
     if (kDebugMode) print('[SecureStorageService] Selected zodiac cleared.');
   }
 
-  // 모든 사용자 관련 데이터 삭제 (토큰, 도시, 띠 정보)
+  // 실패 횟수 저장
+  Future<void> saveFailedAttemptCount(int count) async {
+    await _storage.write(key: keyFailedAttemptCount, value: count.toString());
+    if (kDebugMode) print('[SecureStorageService] Saved failed attempt count: $count');
+  }
+
+  // 저장된 실패 횟수 조회
+  Future<int> getFailedAttemptCount() async {
+    final String? countStr = await _storage.read(key: keyFailedAttemptCount);
+    final int count = countStr != null ? (int.tryParse(countStr) ?? 0) : 0;
+    if (kDebugMode) print('[SecureStorageService] Retrieved failed attempt count: $count');
+    return count;
+  }
+
+  // 저장된 실패 횟수 초기화 (0으로 설정)
+  Future<void> clearFailedAttemptCount() async {
+    await _storage.write(key: keyFailedAttemptCount, value: '0');
+    if (kDebugMode) print('[SecureStorageService] Failed attempt count cleared to 0.');
+  }
+
+  // 모든 사용자 관련 데이터 삭제 (토큰, 도시, 띠 정보, 실패 횟수)
   Future<void> clearAllUserData() async {
     await _storage.delete(key: keyRefreshToken);
     await _storage.delete(key: keySelectedCity);
-    await _storage.delete(key: keySelectedZodiac); // 띠 정보도 삭제
-    if (kDebugMode) print('[SecureStorageService] All user data cleared (tokens, city, and zodiac).');
+    await _storage.delete(key: keySelectedZodiac);
+    await _storage.delete(key: keyFailedAttemptCount); // 실패 횟수도 삭제
+    if (kDebugMode) print('[SecureStorageService] All user data cleared (tokens, city, zodiac, and failed attempts).');
   }
 }
