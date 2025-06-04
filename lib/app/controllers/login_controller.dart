@@ -100,6 +100,10 @@ class LoginController extends GetxController {
           createdAt: responseData['createdAt'] != null ? DateTime.tryParse(responseData['createdAt']) : null,
         );
 
+        if(kDebugMode){
+          print(user.toString());
+        }
+
         if (_user.value.safeRefreshToken != null) {
           await _secureStorageService.saveRefreshToken(refreshToken: _user.value.safeRefreshToken!);
         }
@@ -216,7 +220,6 @@ class LoginController extends GetxController {
         id: rawId,
         nickname: kakaoApiUser.kakaoAccount?.profile?.nickname,
         socialAccessToken: kakaoToken.accessToken,
-        // partnerNickname은 소셜 로그인 시점에는 알 수 없음
       );
       User? updatedUser = await _fetchServiceTokensAndUpdateUser(socialUser);
       if (updatedUser != null) {
@@ -548,7 +551,6 @@ class LoginController extends GetxController {
       if (response.statusCode == 204 || response.statusCode == 200) {
         LoginPlatform currentPlatform = _user.value.platform;
         if (currentPlatform == LoginPlatform.naver) {
-          // Naver SDK unlinking
         } else if (currentPlatform == LoginPlatform.kakao) {
           try {
             await kakao.UserApi.instance.unlink();

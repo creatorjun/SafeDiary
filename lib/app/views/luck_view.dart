@@ -238,11 +238,7 @@ class LuckView extends GetView<LuckController> {
                     )
                   ],
                   _buildLuckCategoryCard("💡 조언", luckData.advice, Icons.lightbulb_outline),
-                  verticalSpaceMedium,
-                  Text(
-                    "태어난 해: ${luckData.applicableYears.join(', ')}",
-                    style: textStyleSmall.copyWith(color: Colors.grey.shade500, fontStyle: FontStyle.italic),
-                  ),
+                  SizedBox(height: 108,)
                 ],
               ),
             ),

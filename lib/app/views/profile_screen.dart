@@ -23,7 +23,7 @@ class ProfileScreen extends GetView<ProfileController> {
     required VoidCallback toggleVisibility,
   }) {
     return Obx(
-      () => TextField(
+          () => TextField(
         controller: controller,
         obscureText: isObscured.value,
         style: textStyleMedium,
@@ -57,17 +57,24 @@ class ProfileScreen extends GetView<ProfileController> {
 
       // 1. 파트너와 이미 연결된 경우 (user.partnerUid 존재를 우선 확인)
       if (user.partnerUid != null && user.partnerUid!.isNotEmpty) {
-        String partnerNickname = '정보 없음';
-        String partnerUserUid = user.partnerUid!; // partnerUid가 있으므로 ! 사용 가능
+        String partnerNickname = '정보 없음'; // 기본값
+        String partnerUserUid = user.partnerUid!;
         String formattedPartnerSince = '날짜 정보 없음';
 
+        // PartnerController의 상세 정보에서 닉네임 가져오기 시도
+        if (partnerRelation?.partnerUser.nickname != null && partnerRelation!.partnerUser.nickname!.isNotEmpty) {
+          partnerNickname = partnerRelation.partnerUser.nickname!;
+        }
+        // PartnerController 정보가 없다면 LoginController의 user.partnerNickname 사용
+        else if (user.partnerNickname != null && user.partnerNickname!.isNotEmpty) {
+          partnerNickname = user.partnerNickname!;
+        }
+
+
         if (partnerRelation != null) {
-          // 상세 정보가 있다면 사용
-          partnerNickname = partnerRelation.partnerUser.nickname ?? '정보 없음';
-          // partnerUserUid는 이미 user.partnerUid로 확인되었으므로 partnerRelation.partnerUser.userUid와 동일해야 함
           try {
             DateTime? partnerSinceDate =
-                DateTime.parse(partnerRelation.partnerSince).toLocal();
+            DateTime.parse(partnerRelation.partnerSince).toLocal();
             formattedPartnerSince = DateFormat(
               'yy년 MM월 dd일',
               'ko_KR',
@@ -98,7 +105,7 @@ class ProfileScreen extends GetView<ProfileController> {
                 verticalSpaceSmall,
                 Text('닉네임: $partnerNickname'),
                 Text('UID: $partnerUserUid'),
-                if (partnerRelation != null) // 상세 정보가 있을 때만 연결 시작일 표시
+                if (partnerRelation != null)
                   Text('연결 시작일: $formattedPartnerSince'),
                 verticalSpaceMedium,
                 ElevatedButton(
@@ -130,9 +137,9 @@ class ProfileScreen extends GetView<ProfileController> {
           }
         }
         String formattedExpiresAt =
-            expiresAtDate != null
-                ? DateFormat('yy/MM/dd HH:mm', 'ko_KR').format(expiresAtDate)
-                : '알 수 없음';
+        expiresAtDate != null
+            ? DateFormat('yy/MM/dd HH:mm', 'ko_KR').format(expiresAtDate)
+            : '알 수 없음';
 
         return Card(
           elevation: 2.0,
@@ -233,7 +240,7 @@ class ProfileScreen extends GetView<ProfileController> {
   }
 
   final TextEditingController _invitationCodeInputController =
-      TextEditingController();
+  TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -266,16 +273,16 @@ class ProfileScreen extends GetView<ProfileController> {
                       borderRadius: BorderRadius.circular(8.0),
                     ),
                     suffixIcon: Obx(
-                      () =>
-                          controller.isNicknameChanged.value &&
-                                  controller.nicknameController.text.isNotEmpty
-                              ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  controller.nicknameController.clear();
-                                },
-                              )
-                              : const SizedBox.shrink(),
+                          () =>
+                      controller.isNicknameChanged.value &&
+                          controller.nicknameController.text.isNotEmpty
+                          ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          controller.nicknameController.clear();
+                        },
+                      )
+                          : const SizedBox.shrink(),
                     ),
                   ),
                 ),
@@ -314,7 +321,7 @@ class ProfileScreen extends GetView<ProfileController> {
                       hintText: '현재 설정된 비밀번호 입력',
                       isObscured: controller.isCurrentPasswordObscured,
                       toggleVisibility:
-                          controller.toggleCurrentPasswordVisibility,
+                      controller.toggleCurrentPasswordVisibility,
                     ),
                   ),
                 _buildPasswordField(
@@ -401,19 +408,19 @@ class ProfileScreen extends GetView<ProfileController> {
                               width: 22,
                               height: 22,
                               child:
-                                  user.platform == LoginPlatform.naver
-                                      ? const Image(
-                                        image: Svg('assets/naver_icon.svg'),
-                                      )
-                                      : user.platform == LoginPlatform.kakao
-                                      ? const Image(
-                                        image: Svg('assets/kakao_icon.svg'),
-                                      )
-                                      : const Icon(
-                                        Icons.device_unknown_outlined,
-                                        color: Colors.grey,
-                                        size: 22,
-                                      ),
+                              user.platform == LoginPlatform.naver
+                                  ? const Image(
+                                image: Svg('assets/naver_icon.svg'),
+                              )
+                                  : user.platform == LoginPlatform.kakao
+                                  ? const Image(
+                                image: Svg('assets/kakao_icon.svg'),
+                              )
+                                  : const Icon(
+                                Icons.device_unknown_outlined,
+                                color: Colors.grey,
+                                size: 22,
+                              ),
                             ),
                             horizontalSpaceSmall,
                             Text(
@@ -422,7 +429,7 @@ class ProfileScreen extends GetView<ProfileController> {
                                   : user.platform == LoginPlatform.kakao
                                   ? "카카오 로그인"
                                   : (user.platform.name.capitalizeFirst ??
-                                      '정보 없음'),
+                                  '정보 없음'),
                               style: textStyleMedium,
                             ),
                           ],

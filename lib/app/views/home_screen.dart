@@ -89,43 +89,37 @@ class HomeScreen extends GetView<HomeController> {
           ),
         ],
       ),
-      body: Obx(
+      body: Obx( // SafeArea 래핑을 제거했습니다.
             () => IndexedStack(
           index: controller.selectedIndex.value,
           children: screens,
         ),
       ),
       bottomNavigationBar: Obx(
-            () => Padding(
-          padding: const EdgeInsets.only(bottom: 10.0, left: 10.0, right: 10.0),
-          child: CrystalNavigationBar(
-            currentIndex: controller.selectedIndex.value,
-            onTap: (index) {
-              controller.changeTabIndex(index);
-            },
-            unselectedItemColor: Colors.grey.shade400,
-            backgroundColor: theme.cardColor.withOpacity(0.85),
-            borderRadius: 24,
-            enableFloatingNavBar: true,
-            items: [
-              CrystalNavigationBarItem(
-                // icon: controller.selectedIndex.value == 0 ? Icons.calendar_month : Icons.calendar_month_outlined, // 선택 시 아이콘 변경 예시
-                icon: Icons.calendar_month_outlined, // 기본 아이콘
-                selectedColor: theme.colorScheme.primary,
-              ),
-              CrystalNavigationBarItem(
-                // icon: controller.selectedIndex.value == 1 ? Icons.wb_sunny : Icons.wb_sunny_outlined, // 선택 시 아이콘 변경 예시
-                icon: Icons.wb_sunny_outlined, // 기본 아이콘
-                selectedColor: theme.colorScheme.primary,
-              ),
-              CrystalNavigationBarItem(
-                // icon: controller.selectedIndex.value == 2 ? Icons.explore : Icons.explore_outlined, // 선택 시 아이콘 변경 예시
-                icon: Icons.explore_outlined, // 기본 아이콘
-                selectedColor: theme.colorScheme.primary,
-              ),
-            ],
-          ),
-        ),
+            () => CrystalNavigationBar(
+              currentIndex: controller.selectedIndex.value,
+              onTap: (index) {
+                controller.changeTabIndex(index);
+              },
+              unselectedItemColor: Colors.grey.shade400,
+              backgroundColor: theme.cardColor.withOpacity(0.85),
+              borderRadius: 24,
+              enableFloatingNavBar: true,
+              items: [
+                CrystalNavigationBarItem(
+                  icon: Icons.calendar_month_outlined,
+                  selectedColor: theme.colorScheme.primary,
+                ),
+                CrystalNavigationBarItem(
+                  icon: Icons.wb_sunny_outlined,
+                  selectedColor: theme.colorScheme.primary,
+                ),
+                CrystalNavigationBarItem(
+                  icon: Icons.explore_outlined,
+                  selectedColor: theme.colorScheme.primary,
+                ),
+              ],
+            ),
       ),
       floatingActionButton: Obx(() {
         if (controller.selectedIndex.value == 0) {
