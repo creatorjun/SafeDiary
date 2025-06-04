@@ -9,6 +9,7 @@ import 'package:intl/intl.dart'; // 날짜 포맷팅
 
 import '../controllers/profile_controller.dart';
 import '../models/user.dart' show LoginPlatform;
+import '../routes/app_pages.dart'; // Routes 사용을 위해 임포트
 import '../theme/app_text_styles.dart';
 import '../theme/app_spacing.dart';
 
@@ -50,27 +51,26 @@ class ProfileScreen extends GetView<ProfileController> {
 
       final user = controller.user; // LoginController의 User 객체
       final partnerRelation =
-          controller
-              .currentPartnerRelation
-              .value; // PartnerController의 상세 관계 정보
+          controller.currentPartnerRelation.value; // PartnerController의 상세 관계 정보
       final invitation = controller.currentInvitation.value;
 
       // 1. 파트너와 이미 연결된 경우 (user.partnerUid 존재를 우선 확인)
       if (user.partnerUid != null && user.partnerUid!.isNotEmpty) {
-        String partnerNickname = '정보 없음'; // 기본값
-        String partnerUserUid = user.partnerUid!;
-        String formattedPartnerSince = '날짜 정보 없음';
+        String partnerNickname = '파트너'; // 기본값
+        final String partnerUserUid = user.partnerUid!;
 
-        // PartnerController의 상세 정보에서 닉네임 가져오기 시도
-        if (partnerRelation?.partnerUser.nickname != null && partnerRelation!.partnerUser.nickname!.isNotEmpty) {
+        // 상세 정보에서 닉네임 가져오기 시도
+        if (partnerRelation?.partnerUser.nickname != null &&
+            partnerRelation!.partnerUser.nickname!.isNotEmpty) {
           partnerNickname = partnerRelation.partnerUser.nickname!;
         }
-        // PartnerController 정보가 없다면 LoginController의 user.partnerNickname 사용
+        // LoginController의 User 객체에 저장된 파트너 닉네임 사용 (fallback)
         else if (user.partnerNickname != null && user.partnerNickname!.isNotEmpty) {
           partnerNickname = user.partnerNickname!;
         }
 
 
+        String formattedPartnerSince = '날짜 정보 없음';
         if (partnerRelation != null) {
           try {
             DateTime? partnerSinceDate =
@@ -91,7 +91,7 @@ class ProfileScreen extends GetView<ProfileController> {
         return Card(
           elevation: 2.0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8.0),
+            borderRadius: BorderRadius.circular(12.0),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -99,27 +99,50 @@ class ProfileScreen extends GetView<ProfileController> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '연결된 파트너',
-                  style: textStyleMedium.copyWith(fontWeight: FontWeight.bold),
+                  '연결된 파트너: $partnerNickname',
+                  style: textStyleMedium.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
                 ),
                 verticalSpaceSmall,
-                Text('닉네임: $partnerNickname'),
-                Text('UID: $partnerUserUid'),
-                if (partnerRelation != null)
-                  Text('연결 시작일: $formattedPartnerSince'),
+                Text('UID: $partnerUserUid', style: textStyleSmall.copyWith(color: Colors.grey.shade600)),
+                if (partnerRelation != null && formattedPartnerSince != '날짜 정보 없음')
+                  Text('연결 시작일: $formattedPartnerSince', style: textStyleSmall.copyWith(color: Colors.grey.shade600)),
                 verticalSpaceMedium,
-                ElevatedButton(
+                ElevatedButton.icon( // 채팅 시작 버튼
+                  icon: Icon(Icons.chat_bubble_outline_rounded, size: 18, color: Theme.of(context).colorScheme.onPrimary),
+                  label: Text(
+                    '$partnerNickname님과 채팅하기',
+                    style: textStyleSmall.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onPrimary),
+                  ),
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 45),
-                    backgroundColor: Colors.red.shade300,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+                  ),
+                  onPressed: () {
+                    Get.toNamed(
+                      Routes.CHAT,
+                      arguments: {
+                        'partnerUid': partnerUserUid,
+                        'partnerNickname': partnerNickname,
+                      },
+                    );
+                  },
+                ),
+                verticalSpaceSmall,
+                OutlinedButton.icon( // 연결 끊기 버튼 스타일 변경
+                  icon: Icon(Icons.link_off_rounded, size: 18, color: Colors.red.shade700),
+                  label: Text(
+                    '파트너 연결 끊기',
+                    style: textStyleSmall.copyWith(color: Colors.red.shade700),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 45),
+                    side: BorderSide(color: Colors.red.shade300),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
                   ),
                   onPressed: () {
                     controller.disconnectPartner();
                   },
-                  child: Text(
-                    '파트너 연결 끊기',
-                    style: textStyleSmall.copyWith(color: Colors.white),
-                  ),
                 ),
               ],
             ),
@@ -144,7 +167,7 @@ class ProfileScreen extends GetView<ProfileController> {
         return Card(
           elevation: 2.0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8.0),
+            borderRadius: BorderRadius.circular(12.0),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -161,11 +184,13 @@ class ProfileScreen extends GetView<ProfileController> {
                     text: invitation.invitationId,
                   ),
                   readOnly: true,
+                  style: textStyleSmall,
                   decoration: InputDecoration(
-                    labelText: '초대 코드',
+                    // labelText: '초대 코드',
                     border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     suffixIcon: IconButton(
-                      icon: const Icon(Icons.copy),
+                      icon: const Icon(Icons.copy, size: 20),
                       tooltip: '코드 복사',
                       onPressed: () {
                         Clipboard.setData(
@@ -177,16 +202,17 @@ class ProfileScreen extends GetView<ProfileController> {
                   ),
                 ),
                 verticalSpaceSmall,
-                Text('만료 시간: $formattedExpiresAt', style: textStyleSmall),
+                Text('만료 시간: $formattedExpiresAt', style: textStyleSmall.copyWith(color: Colors.grey.shade600)),
                 verticalSpaceMedium,
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 45),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
                   ),
                   onPressed: () {
-                    controller.generateInvitationCode();
+                    controller.generateInvitationCode(); // 새 코드 생성
                   },
-                  child: const Text('새로운 코드로 다시 생성하기'),
+                  child: const Text('새 코드로 다시 생성'),
                 ),
               ],
             ),
@@ -202,6 +228,7 @@ class ProfileScreen extends GetView<ProfileController> {
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
                 backgroundColor: Colors.teal,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
               ),
               onPressed: () {
                 controller.generateInvitationCode();
@@ -214,18 +241,20 @@ class ProfileScreen extends GetView<ProfileController> {
             verticalSpaceMedium,
             TextField(
               controller: _invitationCodeInputController,
+              style: textStyleMedium,
               decoration: InputDecoration(
                 hintText: '받은 초대 코드 입력',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8.0),
                 ),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.send),
+                  icon: const Icon(Icons.send_rounded),
                   tooltip: '초대 수락',
                   onPressed: () {
                     final code = _invitationCodeInputController.text.trim();
                     if (code.isNotEmpty) {
                       controller.acceptInvitation(code);
+                      _invitationCodeInputController.clear();
                     } else {
                       Get.snackbar('오류', '초대 코드를 입력해주세요.');
                     }
@@ -279,7 +308,7 @@ class ProfileScreen extends GetView<ProfileController> {
                           ? IconButton(
                         icon: const Icon(Icons.clear),
                         onPressed: () {
-                          controller.nicknameController.clear();
+                          controller.nicknameController.text = controller.user.nickname ?? '';
                         },
                       )
                           : const SizedBox.shrink(),
@@ -291,6 +320,7 @@ class ProfileScreen extends GetView<ProfileController> {
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 50),
                     backgroundColor: Colors.blueAccent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
                   ),
                   onPressed: () {
                     if (controller.isNicknameChanged.value) {
@@ -344,6 +374,7 @@ class ProfileScreen extends GetView<ProfileController> {
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 50),
                     backgroundColor: Theme.of(context).primaryColor,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
                   ),
                   onPressed: () {
                     controller.changeOrSetPassword();
@@ -359,6 +390,7 @@ class ProfileScreen extends GetView<ProfileController> {
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 50),
                       side: BorderSide(color: Colors.red.shade300),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
                     ),
                     onPressed: () {
                       controller.removePassword();
@@ -391,7 +423,7 @@ class ProfileScreen extends GetView<ProfileController> {
                 Card(
                   elevation: 2.0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
+                    borderRadius: BorderRadius.circular(12.0),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -409,16 +441,16 @@ class ProfileScreen extends GetView<ProfileController> {
                               height: 22,
                               child:
                               user.platform == LoginPlatform.naver
-                                  ? const Image(
-                                image: Svg('assets/naver_icon.svg'),
+                                  ? Image(
+                                image: Svg('assets/naver_icon.svg', color: Colors.green.shade600),
                               )
                                   : user.platform == LoginPlatform.kakao
                                   ? const Image(
                                 image: Svg('assets/kakao_icon.svg'),
                               )
-                                  : const Icon(
+                                  : Icon(
                                 Icons.device_unknown_outlined,
-                                color: Colors.grey,
+                                color: Colors.grey.shade700,
                                 size: 22,
                               ),
                             ),
@@ -430,7 +462,7 @@ class ProfileScreen extends GetView<ProfileController> {
                                   ? "카카오 로그인"
                                   : (user.platform.name.capitalizeFirst ??
                                   '정보 없음'),
-                              style: textStyleMedium,
+                              style: textStyleMedium.copyWith(color: Colors.grey.shade800),
                             ),
                           ],
                         ),
@@ -439,7 +471,7 @@ class ProfileScreen extends GetView<ProfileController> {
                           Align(
                             alignment: Alignment.bottomRight,
                             child: Text(
-                              'Since: $formattedCreatedAt',
+                              '가입일: $formattedCreatedAt',
                               style: textStyleSmall.copyWith(
                                 color: Colors.grey.shade600,
                               ),
@@ -452,26 +484,26 @@ class ProfileScreen extends GetView<ProfileController> {
                 ),
                 verticalSpaceMedium,
                 Card(
-                  elevation: 2.0,
-                  color: Colors.white,
+                  elevation: 1.0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
+                      borderRadius: BorderRadius.circular(12.0),
+                      side: BorderSide(color: Colors.red.shade100)
                   ),
                   child: ListTile(
                     leading: Icon(
-                      Icons.warning_amber_rounded,
+                      Icons.delete_forever_outlined,
                       color: Colors.red.shade600,
                     ),
                     title: Text(
                       '회원 탈퇴',
                       style: textStyleMedium.copyWith(
                         color: Colors.red.shade700,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     trailing: Icon(
-                      Icons.arrow_forward_ios,
-                      color: Colors.grey.shade600,
+                      Icons.arrow_forward_ios_rounded,
+                      color: Colors.grey.shade500,
                       size: 16,
                     ),
                     onTap: () {
@@ -479,7 +511,7 @@ class ProfileScreen extends GetView<ProfileController> {
                     },
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16.0,
-                      vertical: 8.0,
+                      vertical: 4.0,
                     ),
                   ),
                 ),

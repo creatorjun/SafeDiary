@@ -8,6 +8,7 @@ abstract class Routes {
   static const HOME = _Paths.HOME;
   static const PROFILE = _Paths.PROFILE;
   static const PROFILE_AUTH = _Paths.PROFILE_AUTH; // PROFILE_AUTH 라우트 정의 추가
+  static const CHAT = _Paths.CHAT; // CHAT 라우트 정의 추가
 }
 
 abstract class _Paths {
@@ -16,4 +17,5 @@ abstract class _Paths {
   static const HOME = '/home';
   static const PROFILE = '/profile';
   static const PROFILE_AUTH = '/profile-auth'; // PROFILE_AUTH 경로 문자열 추가
+  static const CHAT = '/chat'; // CHAT 경로 문자열 추가
 }

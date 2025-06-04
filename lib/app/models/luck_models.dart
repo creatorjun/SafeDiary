@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 
 class ZodiacLuckData {
   final String requestDate; // API는 date string으로 반환하지만, DateTime으로 파싱해서 사용 가능
