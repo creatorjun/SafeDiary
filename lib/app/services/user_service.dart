@@ -3,14 +3,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-// import 'package:get/get.dart'; // GetxService를 사용하지 않는다면 제거 가능
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
-// User 모델 등 다른 모델이 필요하면 임포트
 
-class UserService { // GetxService를 사용하지 않고 일반 클래스로 만들어도 무방합니다.
-  // Get.find()로 주입받지 않고 직접 생성자 주입 등을 사용할 수 있습니다.
+class UserService {
 
   /// 사용자 닉네임을 서버에 업데이트합니다.
   /// 성공 시 true, 실패 시 false 또는 예외 발생.
@@ -273,6 +270,53 @@ class UserService { // GetxService를 사용하지 않고 일반 클래스로 �
         print('[UserService] deleteUserAccount Error: $e');
       }
       rethrow;
+    }
+  }
+
+  /// FCM 토큰을 서버에 등록/갱신합니다.
+  Future<void> updateFcmToken(String fcmToken, String accessToken) async {
+    final String? baseUrl = AppConfig.apiUrl;
+    if (baseUrl == null) {
+      throw Exception('API URL이 설정되지 않았습니다.');
+    }
+    if (fcmToken.isEmpty) {
+      throw Exception('FCM 토큰이 비어있습니다.');
+    }
+
+    final Uri requestUri = Uri.parse('$baseUrl/api/v1/users/me/fcm-token');
+    if (kDebugMode) {
+      print('[UserService] updateFcmToken: $fcmToken');
+    }
+
+    try {
+      final response = await http.put(
+        requestUri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: json.encode({'fcmToken': fcmToken}),
+      );
+
+      if (kDebugMode) {
+        print('[UserService] updateFcmToken response status: ${response.statusCode}');
+      }
+
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          print('[UserService] FCM token updated successfully.');
+        }
+      } else {
+        if (kDebugMode) {
+          final errorBody = json.decode(utf8.decode(response.bodyBytes));
+          final errorMessage = errorBody['message'] as String? ?? 'FCM 토큰 업데이트 실패 (코드: ${response.statusCode})';
+          print('[UserService] updateFcmToken Error: $errorMessage');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[UserService] updateFcmToken Exception: $e');
+      }
     }
   }
 }

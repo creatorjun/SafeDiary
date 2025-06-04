@@ -1,5 +1,7 @@
 // lib/main.dart
 
+import 'package:firebase_core/firebase_core.dart'; // Firebase Core 임포트
+import 'package:firebase_messaging/firebase_messaging.dart'; // Firebase Messaging 임포트
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
@@ -12,11 +14,49 @@ import 'app/routes/app_pages.dart';
 import 'app/config/app_config.dart';
 import 'app/controllers/login_controller.dart';
 import 'app/bindings/login_binding.dart';
-import 'app/services/secure_storage_service.dart'; // SecureStorageService 임포트
-// AuthService와 UserService는 LoginBinding에서 처리하므로 여기서 직접 임포트할 필요는 없습니다.
+import 'app/services/secure_storage_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (kDebugMode) {
+    print("[main.dart] Handling a background message: ${message.messageId}");
+    print('[main.dart] Background Message data: ${message.data}');
+    if (message.notification != null) {
+      print('[main.dart] Background Message notification: ${message.notification!.title} / ${message.notification!.body}');
+    }
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase 앱 초기화
+  await Firebase.initializeApp();
+
+  // FCM 권한 요청 (iOS 및 Web)
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
+  NotificationSettings settings = await messaging.requestPermission(
+    alert: true,
+    announcement: false,
+    badge: true,
+    carPlay: false,
+    criticalAlert: false,
+    provisional: false,
+    sound: true,
+  );
+
+  if (kDebugMode) {
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      print('[main.dart] User granted FCM permission');
+    } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+      print('[main.dart] User granted provisional FCM permission');
+    } else {
+      print('[main.dart] User declined or has not accepted FCM permission');
+    }
+  }
+
+  // 백그라운드 메시지 핸들러 설정
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // .env 파일 로드
   await AppConfig.loadEnv();
@@ -25,22 +65,70 @@ void main() async {
   await initializeDateFormatting();
 
   // --- SecureStorageService 등록 ---
-  // 앱 전역에서 사용될 수 있도록 영구 인스턴스로 등록합니다.
   Get.put<SecureStorageService>(SecureStorageService(), permanent: true);
-  // ---------------------------------
+
+  // --- UserService 등록 (LoginBinding에서 이미 처리하지만, 명시적으로 여기서 할 수도 있음) ---
+  // Get.lazyPut<UserService>(() => UserService()); // LoginBinding에서 처리
 
   // LoginBinding을 통해 LoginController 및 관련 서비스(AuthService, UserService) 등록
-  // LoginController가 permanent:true 이므로, LoginBinding도 앱 시작 시점에 호출될 수 있습니다.
   if (!Get.isRegistered<LoginController>()) {
-    LoginBinding()
-        .dependencies(); // 이 안에서 LoginController, AuthService, UserService가 등록됩니다.
+    LoginBinding().dependencies();
   }
   final LoginController loginController = Get.find<LoginController>();
+
+  // FCM 토큰 가져오기 및 서버 전송 로직
+  try {
+    String? fcmToken = await messaging.getToken();
+    if (kDebugMode) {
+      print("[main.dart] FCM Token: $fcmToken");
+    }
+    if (fcmToken != null && loginController.isLoggedIn.value) {
+      // 로그인이 되어 있는 경우에만 즉시 서버로 전송
+      await loginController.sendFcmTokenToServer(fcmToken);
+    } else if (fcmToken != null) {
+      // TODO: 로그인이 안 되어있다면, 토큰을 임시 저장했다가 로그인 성공 후 전송하는 로직 고려 가능
+      if (kDebugMode) {
+        print("[main.dart] User not logged in, FCM token not sent to server yet: $fcmToken");
+      }
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print("[main.dart] Error getting FCM token: $e");
+    }
+  }
+
+  // FCM 토큰 갱신 리스너
+  messaging.onTokenRefresh.listen((fcmToken) {
+    if (kDebugMode) {
+      print("[main.dart] FCM Token Refreshed: $fcmToken");
+    }
+    if (loginController.isLoggedIn.value) {
+      // 로그인이 되어 있는 경우에만 즉시 서버로 전송
+      loginController.sendFcmTokenToServer(fcmToken);
+    } else {
+      // TODO: 토큰 갱신 시점에도 로그인이 안 되어있다면, 임시 저장 후 로그인 성공 시 전송
+      if (kDebugMode) {
+        print("[main.dart] User not logged in during token refresh, FCM token not sent to server yet: $fcmToken");
+      }
+    }
+  }).onError((err) {
+    if (kDebugMode) {
+      print("[main.dart] FCM onTokenRefresh Error: $err");
+    }
+  });
+
 
   // 자동 로그인 시도
   bool autoLoginSuccess = false;
   try {
     autoLoginSuccess = await loginController.tryAutoLoginWithRefreshToken();
+    if (autoLoginSuccess) {
+      // 자동 로그인 성공 후에도 FCM 토큰을 한번 더 확인하여 전송 (토큰이 변경되었을 수 있음)
+      String? fcmToken = await messaging.getToken();
+      if (fcmToken != null) {
+        await loginController.sendFcmTokenToServer(fcmToken);
+      }
+    }
   } catch (e) {
     if (kDebugMode) {
       print("[main.dart] Auto login attempt failed: $e");

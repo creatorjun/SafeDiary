@@ -8,20 +8,23 @@ import 'package:get/get.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk_user.dart' as kakao;
 import 'package:naver_login_sdk/naver_login_sdk.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_messaging/firebase_messaging.dart'; // FirebaseMessaging 임포트
 
 import '../models/user.dart';
 import '../routes/app_pages.dart';
 import '../config/app_config.dart';
 import '../services/secure_storage_service.dart';
+import '../services/user_service.dart';
 import 'partner_controller.dart';
 
 class LoginController extends GetxController {
   final SecureStorageService _secureStorageService = SecureStorageService();
+  final UserService _userService = Get.find<UserService>();
 
   final Rx<User> _user = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false).obs;
   User get user => _user.value;
 
-  RxBool get isLoggedIn => (_user.value.platform != LoginPlatform.none).obs;
+  RxBool get isLoggedIn => (_user.value.platform != LoginPlatform.none && _user.value.safeAccessToken != null).obs;
 
   final RxBool _isLoading = false.obs;
   bool get isLoading => _isLoading.value;
@@ -91,7 +94,7 @@ class LoginController extends GetxController {
           id: responseData['uid'] as String? ?? socialUser.id,
           nickname: responseData['nickname'] as String? ?? socialUser.nickname,
           partnerUid: responseData['partnerUid'] as String?,
-          partnerNickname: responseData['partnerNickname'] as String?, // partnerNickname 파싱 추가
+          partnerNickname: responseData['partnerNickname'] as String?,
           socialAccessToken: socialUser.socialAccessToken,
           safeAccessToken: responseData['accessToken'] as String?,
           safeRefreshToken: responseData['refreshToken'] as String?,
@@ -100,12 +103,32 @@ class LoginController extends GetxController {
           createdAt: responseData['createdAt'] != null ? DateTime.tryParse(responseData['createdAt']) : null,
         );
 
-        if(kDebugMode){
-          print(user.toString());
+        if (kDebugMode) {
+          String? fcmToken;
+          try {
+            fcmToken = await FirebaseMessaging.instance.getToken();
+          } catch (e) {
+            print("[LoginController] Error getting FCM token for logging: $e");
+          }
+          print("User Details: ${user.toString()}, FCM Token for logging: $fcmToken");
         }
 
         if (_user.value.safeRefreshToken != null) {
           await _secureStorageService.saveRefreshToken(refreshToken: _user.value.safeRefreshToken!);
+        }
+
+        // 로그인 성공 후 FCM 토큰 가져와서 서버로 전송 (중복 호출되어도 sendFcmTokenToServer 내부에서 처리)
+        if (isLoggedIn.value) {
+          try {
+            String? currentFcmToken = await FirebaseMessaging.instance.getToken();
+            if (currentFcmToken != null) {
+              await sendFcmTokenToServer(currentFcmToken);
+            }
+          } catch (e) {
+            if (kDebugMode) {
+              print("[LoginController] Error getting/sending FCM token after login: $e");
+            }
+          }
         }
         return _user.value;
       } else {
@@ -142,7 +165,6 @@ class LoginController extends GetxController {
                       id: rawId,
                       nickname: profile.nickName,
                       socialAccessToken: naverSocialToken,
-                      // partnerNickname은 소셜 로그인 시점에는 알 수 없음
                     );
                     User? updatedUser = await _fetchServiceTokensAndUpdateUser(socialUser);
                     if (updatedUser != null) {
@@ -168,20 +190,19 @@ class LoginController extends GetxController {
             _setError('네이버 로그인 인증 실패: HTTP $httpStatus - $message');
             _setLoading(false);
           },
-            onError: (errorCode, message) {
-              // errorCode를 문자열로 변환하여 비교하거나, SDK 명세에 따른 정확한 타입/값으로 비교
-              if (message.contains('user_cancel') || // 메시지 기반 체크 (보조적)
-                  message.contains('closed') || // 메시지 기반 체크 (보조적)
-                  (errorCode == 2) // 사용자 취소 에러 코드
-              ) {
-                _setError('네이버 로그인이 사용자에 의해 취소되었습니다.', showGeneralMessageToUser: false);
-              } else if (message.contains('naverapp_not_installed') || message.contains("not_available_naver_app")) {
-                _setError('네이버 앱이 설치되어 있지 않거나 사용할 수 없습니다. 웹으로 로그인을 시도합니다.', showGeneralMessageToUser: false);
-              } else {
-                _setError('네이버 로그인 인증 오류: $errorCode - $message');
-              }
-              _setLoading(false);
-            },
+          onError: (errorCode, message) {
+            if (message.contains('user_cancel') ||
+                message.contains('closed') ||
+                (errorCode == 2)
+            ) {
+              _setError('네이버 로그인이 사용자에 의해 취소되었습니다.', showGeneralMessageToUser: false);
+            } else if (message.contains('naverapp_not_installed') || message.contains("not_available_naver_app")) {
+              _setError('네이버 앱이 설치되어 있지 않거나 사용할 수 없습니다. 웹으로 로그인을 시도합니다.', showGeneralMessageToUser: false);
+            } else {
+              _setError('네이버 로그인 인증 오류: $errorCode - $message');
+            }
+            _setLoading(false);
+          },
         ),
       );
     } catch (error,s) {
@@ -245,13 +266,14 @@ class LoginController extends GetxController {
       }
 
       await _secureStorageService.clearRefreshToken();
+      await _secureStorageService.clearFailedAttemptCount();
       LoginPlatform currentPlatform = _user.value.platform;
       if (currentPlatform == LoginPlatform.naver) {
         await NaverLoginSDK.release();
       } else if (currentPlatform == LoginPlatform.kakao) {
         await kakao.UserApi.instance.logout();
       }
-      _user.value = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false, createdAt: null, partnerNickname: null); // partnerNickname 초기화
+      _user.value = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false, createdAt: null, partnerNickname: null);
       Get.snackbar('로그아웃', '성공적으로 로그아웃되었습니다.');
       Get.offAllNamed(Routes.login);
     } catch (error, stackTrace) {
@@ -281,7 +303,7 @@ class LoginController extends GetxController {
       }
 
       final Uri refreshUri = Uri.parse('$baseUrl/api/v1/auth/refresh');
-      refreshResponse = await http.post( // <--- 여기서 refreshResponse에 값이 할당됨
+      refreshResponse = await http.post(
         refreshUri,
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $storedRefreshToken'},
         body: json.encode({'refreshToken': storedRefreshToken}),
@@ -308,7 +330,13 @@ class LoginController extends GetxController {
         );
 
         if(kDebugMode){
-          print(_user.value.toString());
+          String? fcmToken;
+          try {
+            fcmToken = await FirebaseMessaging.instance.getToken();
+          } catch (e) {
+            print("[LoginController] Error getting FCM token for logging (auto-login): $e");
+          }
+          print("User Details (auto-login): ${user.toString()}, FCM Token for logging: $fcmToken");
         }
 
         if (_user.value.safeRefreshToken != null) {
@@ -316,18 +344,18 @@ class LoginController extends GetxController {
         }
         _setLoading(false);
         return true;
-      } else { // <--- 이 블록에 도달했다면 refreshResponse는 이미 값이 할당된 상태여야 함
+      } else {
         await _secureStorageService.clearRefreshToken();
-        // 여기서 'response' 대신 'refreshResponse'를 사용해야 함
+        await _secureStorageService.clearFailedAttemptCount();
         _setError('토큰 갱신 실패 (코드: ${refreshResponse.statusCode}), 응답: ${refreshResponse.body}');
       }
-    } catch (e,s) { // 네트워크 오류 등 http.post 자체가 실패한 경우
+    } catch (e,s) {
       _setError('자동 로그인 시도 중 예외 발생: $e\n$s');
-      // 이 경우 refreshResponse는 초기화되지 않았을 수 있음
     }
     _setLoading(false);
     return false;
   }
+
   Future<void> updateUserNickname(String newNickname) async {
     if (newNickname.trim().isEmpty) {
       Get.snackbar('오류', '닉네임은 비워둘 수 없습니다.');
@@ -448,8 +476,6 @@ class LoginController extends GetxController {
         _user.value = _user.value.copyWith(
           isAppPasswordSet: responseData['appPasswordSet'] as bool? ?? true,
           nickname: responseData['nickname'] as String? ?? _user.value.nickname,
-          // partnerNickname은 이 API 응답에 포함되어 있지 않음 (Swagger UserAccountUpdateResponseDto 기준)
-          // partnerNickname: responseData['partnerNickname'] as String? ?? _user.value.partnerNickname,
         );
         Get.snackbar('성공', '앱 비밀번호가 성공적으로 설정/변경되었습니다.');
         _setLoading(false);
@@ -503,14 +529,14 @@ class LoginController extends GetxController {
         _setLoading(false);
         return true;
       } else if (response.statusCode == 401) {
-        String errorMessage = '현재 앱 비밀번호가 일치하지 않아 해제할 수 없습니다.';
+        String errorMessageText = '현재 앱 비밀번호가 일치하지 않아 해제할 수 없습니다.';
         try {
           final responseBody = json.decode(response.body);
           if (responseBody['message'] != null) {
-            errorMessage = responseBody['message'];
+            errorMessageText = responseBody['message'];
           }
         } catch (_) {}
-        _setError(errorMessage, showGeneralMessageToUser: false);
+        _setError(errorMessageText, showGeneralMessageToUser: false);
         _setLoading(false);
         return false;
       }
@@ -563,7 +589,8 @@ class LoginController extends GetxController {
           }
         }
         await _secureStorageService.clearRefreshToken();
-        _user.value = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false, partnerUid: null, createdAt: null, partnerNickname: null); // partnerNickname 초기화
+        await _secureStorageService.clearFailedAttemptCount();
+        _user.value = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false, partnerUid: null, createdAt: null, partnerNickname: null);
 
         if (Get.isRegistered<PartnerController>()) {
           Get.find<PartnerController>().clearPartnerStateOnLogout();
@@ -578,6 +605,32 @@ class LoginController extends GetxController {
       _setError('회원 탈퇴 처리 중 오류 발생: $error\n$s');
     } finally {
       _setLoading(false);
+    }
+  }
+
+  Future<void> sendFcmTokenToServer(String fcmToken) async {
+    if (!isLoggedIn.value || _user.value.safeAccessToken == null) {
+      if (kDebugMode) {
+        print('[LoginController] User not logged in or no access token. FCM token will not be sent yet.');
+      }
+      return;
+    }
+    if (fcmToken.isEmpty) {
+      if (kDebugMode) {
+        print('[LoginController] FCM token is empty. Cannot send to server.');
+      }
+      return;
+    }
+
+    try {
+      await _userService.updateFcmToken(fcmToken, _user.value.safeAccessToken!);
+      if (kDebugMode) {
+        print('[LoginController] Attempted to send FCM token to server: $fcmToken');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[LoginController] Error sending FCM token to server: $e');
+      }
     }
   }
 
