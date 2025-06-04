@@ -232,7 +232,7 @@ class WeatherView extends GetView<WeatherController> {
         ),
         Positioned.fill(
           child: Container(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withAlpha(30),
             padding: const EdgeInsets.symmetric(horizontal: 20.0).copyWith(
               top: MediaQuery.of(context).padding.top + 10,
               bottom: MediaQuery.of(context).padding.bottom + 20,
@@ -336,7 +336,7 @@ class WeatherView extends GetView<WeatherController> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: textStyleMedium.copyWith(color: Colors.white.withOpacity(0.85))),
+          Text(label, style: textStyleMedium.copyWith(color: Colors.white.withAlpha(15))),
           Text(
             value != null ? '$value$unit' : '-',
             style: textStyleMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w500),

@@ -34,7 +34,7 @@ void main() {
     }
     // Build our app and trigger a frame.
     await tester.pumpWidget(
-      MyApp(initialRoute: autoLoginSuccess ? Routes.HOME : Routes.LOGIN),
+      MyApp(initialRoute: autoLoginSuccess ? Routes.home : Routes.login),
     );
 
     // Verify that our counter starts at 0.

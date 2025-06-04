@@ -120,7 +120,7 @@ class ProfileScreen extends GetView<ProfileController> {
                   ),
                   onPressed: () {
                     Get.toNamed(
-                      Routes.CHAT,
+                      Routes.chat,
                       arguments: {
                         'partnerUid': partnerUserUid,
                         'partnerNickname': partnerNickname,

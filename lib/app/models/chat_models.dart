@@ -1,15 +1,15 @@
 
 enum MessageType {
-  CHAT,
-  JOIN,
-  LEAVE;
+  chat,
+  join,
+  leave;
 
   String toJson() => name;
   static MessageType fromJson(String? jsonValue) {
-    if (jsonValue == null) return MessageType.CHAT; // 기본값 또는 오류 처리
+    if (jsonValue == null) return MessageType.chat; // 기본값 또는 오류 처리
     return MessageType.values.firstWhere(
           (e) => e.name.toLowerCase() == jsonValue.toLowerCase(),
-      orElse: () => MessageType.CHAT, // 매칭되는 값이 없을 경우 기본값
+      orElse: () => MessageType.chat, // 매칭되는 값이 없을 경우 기본값
     );
   }
 }

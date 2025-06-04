@@ -64,7 +64,7 @@ class ChatController extends GetxController {
       return;
     }
 
-    String stompUrl = baseApiUrl.replaceFirst(RegExp(r'^http'), 'ws') + "/ws";
+    String stompUrl = "${baseApiUrl.replaceFirst(RegExp(r'^http'), 'ws')}/ws";
 
     if (kDebugMode) {
       print('[ChatController] Attempting to connect to STOMP: $stompUrl');
@@ -252,7 +252,7 @@ class ChatController extends GetxController {
     // 'timestamp'는 서버에서 최종적으로 설정하거나 클라이언트 시간을 참고할 수 있습니다.
     // 'id'는 서버에서 생성하므로 클라이언트에서는 보내지 않습니다.
     final messageToSendPayload = {
-      'type': MessageType.CHAT.name, // 서버 ChatMessageDto의 type 필드와 일치해야 함
+      'type': MessageType.chat.name, // 서버 ChatMessageDto의 type 필드와 일치해야 함
       'content': content,
       'senderUid': _currentUserUid,
       'receiverUid': _chatPartnerUid,

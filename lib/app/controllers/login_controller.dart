@@ -146,7 +146,7 @@ class LoginController extends GetxController {
                     );
                     User? updatedUser = await _fetchServiceTokensAndUpdateUser(socialUser);
                     if (updatedUser != null) {
-                      Get.offAllNamed(Routes.HOME);
+                      Get.offAllNamed(Routes.home);
                     }
                   } catch (e,s) {
                     _setError('네이버 프로필 처리 중 오류: $e\n$s');
@@ -168,16 +168,32 @@ class LoginController extends GetxController {
             _setError('네이버 로그인 인증 실패: HTTP $httpStatus - $message');
             _setLoading(false);
           },
-          onError: (errorCode, message) {
-            if (message.contains('user_cancel') || message.contains('closed') || errorCode == 'user_cancel') {
-              _setError('네이버 로그인이 사용자에 의해 취소되었습니다.', showGeneralMessageToUser: false);
-            } else if (message.contains('naverapp_not_installed')) {
-              _setError('네이버 앱이 설치되어 있지 않습니다. 웹으로 로그인을 시도합니다.', showGeneralMessageToUser: false);
-            } else {
-              _setError('네이버 로그인 인증 오류: $errorCode - $message');
-            }
-            _setLoading(false);
-          },
+            onError: (errorCode, message) {
+              // errorCode를 문자열로 변환하여 비교하거나, SDK 명세에 따른 정확한 타입/값으로 비교
+              final String errorCodeStr = errorCode.toString(); // errorCode를 문자열로 변환
+
+              // 네이버 SDK의 실제 사용자 취소 코드값 확인 필요 (예시로 'user_cancel' 문자열 비교 포함)
+              // SDK 문서나 테스트를 통해 정확한 int 값을 확인하고 해당 값으로 비교하는 것이 가장 좋습니다.
+              // 예를 들어, 사용자 취소가 특정 숫자 코드 (예: 1, -100 등)로 온다면
+              // if (errorCode == 1 || errorCode == -100 || message.contains('user_cancel') || message.contains('closed'))
+              // 와 같이 조건을 구성해야 합니다.
+
+              if (message.contains('user_cancel') || // 메시지 기반 체크 (보조적)
+                  message.contains('closed') || // 메시지 기반 체크 (보조적)
+                  errorCodeStr == 'user_cancel' || // 문자열화된 코드 비교 (SDK가 문자열 코드를 반환하는 경우)
+                  // 여기에 실제 네이버 SDK가 사용자 취소 시 반환하는 int errorCode 값을 넣어야 합니다.
+                  // 예: errorCode == NaverLoginErrors.USER_CANCELLED (SDK에 이런 enum이 있다면)
+                  // 예: errorCode == 123 (SDK가 특정 숫자 코드를 반환한다면)
+                  (errorCode == 2) // 예시: 만약 사용자 취소가 int 0으로 온다면
+              ) {
+                _setError('네이버 로그인이 사용자에 의해 취소되었습니다.', showGeneralMessageToUser: false);
+              } else if (message.contains('naverapp_not_installed') || message.contains("not_available_naver_app")) {
+                _setError('네이버 앱이 설치되어 있지 않거나 사용할 수 없습니다. 웹으로 로그인을 시도합니다.', showGeneralMessageToUser: false);
+              } else {
+                _setError('네이버 로그인 인증 오류: $errorCodeStr - $message');
+              }
+              _setLoading(false);
+            },
         ),
       );
     } catch (error,s) {
@@ -223,7 +239,7 @@ class LoginController extends GetxController {
       );
       User? updatedUser = await _fetchServiceTokensAndUpdateUser(socialUser);
       if (updatedUser != null) {
-        Get.offAllNamed(Routes.HOME);
+        Get.offAllNamed(Routes.home);
       }
     } catch (error,s) {
       _setError('카카오 로그인 중 오류 발생: $error\n$s');
@@ -249,7 +265,7 @@ class LoginController extends GetxController {
       }
       _user.value = User(platform: LoginPlatform.none, isNew: false, isAppPasswordSet: false, createdAt: null, partnerNickname: null); // partnerNickname 초기화
       Get.snackbar('로그아웃', '성공적으로 로그아웃되었습니다.');
-      Get.offAllNamed(Routes.LOGIN);
+      Get.offAllNamed(Routes.login);
     } catch (error, stackTrace) {
       _setError('logout() 중 오류: $error\n$stackTrace');
     } finally {
@@ -565,7 +581,7 @@ class LoginController extends GetxController {
           Get.find<PartnerController>().clearPartnerStateOnLogout();
         }
 
-        Get.offAllNamed(Routes.LOGIN);
+        Get.offAllNamed(Routes.login);
         Get.snackbar('회원 탈퇴 완료', '회원 탈퇴가 성공적으로 처리되었습니다.');
       } else {
         _setError('회원 탈퇴 실패 (코드: ${response.statusCode}), 응답: ${response.body}');

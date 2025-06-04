@@ -58,7 +58,7 @@ class HomeScreen extends GetView<HomeController> {
             tooltip: '더보기',
             onSelected: (String value) {
               if (value == 'profile') {
-                Get.toNamed(Routes.PROFILE_AUTH);
+                Get.toNamed(Routes.profileAuth);
               } else if (value == 'logout') {
                 loginController.logout();
               }
@@ -102,7 +102,7 @@ class HomeScreen extends GetView<HomeController> {
                 controller.changeTabIndex(index);
               },
               unselectedItemColor: Colors.grey.shade400,
-              backgroundColor: theme.cardColor.withOpacity(0.85),
+              backgroundColor: theme.cardColor.withAlpha(15),
               borderRadius: 24,
               enableFloatingNavBar: true,
               items: [

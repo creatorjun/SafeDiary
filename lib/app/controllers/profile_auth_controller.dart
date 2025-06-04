@@ -32,7 +32,7 @@ class ProfileAuthController extends GetxController {
   void _checkPasswordStatusAndProceed() {
     // 앱 비밀번호가 설정되어 있지 않으면 바로 프로필 화면으로 이동
     if (!_loginController.user.isAppPasswordSet) {
-      Get.offNamed(Routes.PROFILE);
+      Get.offNamed(Routes.profile);
     }
   }
 
@@ -54,7 +54,7 @@ class ProfileAuthController extends GetxController {
     if (isVerified) {
       passwordController.clear();
       failedAttemptCount.value = 0;
-      Get.offNamed(Routes.PROFILE); // 인증 성공 시 프로필 화면으로 이동
+      Get.offNamed(Routes.profile); // 인증 성공 시 프로필 화면으로 이동
     } else {
       // LoginController에서 설정한 에러 메시지를 사용하거나 여기서 직접 설정
       if (_loginController.errorMessage.isNotEmpty) {

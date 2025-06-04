@@ -62,8 +62,6 @@ class _AddEditEventDialogState extends State<AddEditEventDialog> {
         return Theme(
           data: Theme.of(context).copyWith(
             timePickerTheme: TimePickerThemeData(
-              backgroundColor: Theme.of(context).dialogBackgroundColor,
-              // 필요에 따라 다른 속성들도 커스터마이징
             ),
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
@@ -103,7 +101,7 @@ class _AddEditEventDialogState extends State<AddEditEventDialog> {
     required IconData icon,
   }) {
     return ListTile(
-      leading: Icon(icon, color: Theme.of(context).colorScheme.primary.withOpacity(0.8)),
+      leading: Icon(icon, color: Theme.of(context).colorScheme.primary.withAlpha(20)),
       title: Text(label, style: textStyleSmall),
       subtitle: Text(
         currentTime?.format(context) ?? "시간 미지정",
@@ -141,7 +139,7 @@ class _AddEditEventDialogState extends State<AddEditEventDialog> {
           Get.snackbar("오류", "종료 시간은 시작 시간보다 늦어야 합니다.",
               snackPosition: SnackPosition.BOTTOM,
               margin: const EdgeInsets.all(12),
-              backgroundColor: Colors.red.withOpacity(0.9),
+              backgroundColor: Colors.red.withAlpha(10),
               colorText: Colors.white);
           return;
         }

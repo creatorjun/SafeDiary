@@ -21,7 +21,7 @@ class LuckView extends GetView<LuckController> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withAlpha(90),
               blurRadius: 8.0,
               spreadRadius: 2.0,
             )
@@ -181,7 +181,7 @@ class LuckView extends GetView<LuckController> {
                       style: textStyleLarge,
                     )),
                     horizontalSpaceSmall,
-                    Icon(Icons.arrow_drop_down_circle_outlined, size: 20, color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.7)),
+                    Icon(Icons.arrow_drop_down_circle_outlined, size: 20, color: Theme.of(context).textTheme.titleLarge?.color?.withAlpha(30)),
                   ],
                 ),
               ),
@@ -274,7 +274,7 @@ class LuckView extends GetView<LuckController> {
             verticalSpaceSmall,
             Text(
               content,
-              style: textStyleSmall.copyWith(height: 1.5, color: Colors.black87.withOpacity(0.75)),
+              style: textStyleSmall.copyWith(height: 1.5, color: Colors.black87.withAlpha(25)),
               textAlign: TextAlign.justify,
             ),
           ],

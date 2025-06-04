@@ -140,7 +140,7 @@ class ChatScreen extends GetView<ChatController> {
               borderRadius: radius,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withAlpha(95),
                   blurRadius: 3,
                   offset: const Offset(0, 1),
                 )
@@ -173,7 +173,7 @@ class ChatScreen extends GetView<ChatController> {
           BoxShadow(
             offset: const Offset(0, -1),
             blurRadius: 4,
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withAlpha(95),
           ),
         ],
       ),

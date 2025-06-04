@@ -68,7 +68,7 @@ void main() async {
 
   KakaoSdk.init(nativeAppKey: kakaoNativeAppKey);
 
-  runApp(MyApp(initialRoute: autoLoginSuccess ? Routes.HOME : Routes.LOGIN));
+  runApp(MyApp(initialRoute: autoLoginSuccess ? Routes.home : Routes.login));
 }
 
 class MyApp extends StatelessWidget {

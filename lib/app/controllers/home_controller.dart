@@ -156,7 +156,7 @@ class HomeController extends GetxController {
                         ),
                         onPressed: () {
                           Get.back();
-                          Get.toNamed(Routes.PROFILE_AUTH);
+                          Get.toNamed(Routes.profileAuth);
                         },
                         child: Text(
                           '지금 설정',
