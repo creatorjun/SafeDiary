@@ -4,6 +4,7 @@
 *.pyc
 *.swp
 *.env
+*.json
 .DS_Store
 .atom/
 .build/
@@ -44,3 +45,5 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/lib/firebase_options.dart
+/ios/Runner/GoogleService-Info.plist
